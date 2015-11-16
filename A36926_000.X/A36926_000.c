@@ -231,14 +231,6 @@ void DoA36926(void) {
     slave_board_data.log_data[7] = global_data_A36926.eoc_not_reached_count;
   
     
-    
-    // If the system is faulted or inhibited set the red LED
-    if (_CONTROL_NOT_READY) {
-      PIN_LED_A_RED = OLL_LED_ON;
-    } else {
-      PIN_LED_A_RED = !OLL_LED_ON;
-    }
-    
     if (global_data_A36926.control_state == STATE_POWER_UP) {
       global_data_A36926.power_up_delay_counter++;
       if (global_data_A36926.power_up_delay_counter >= POWER_UP_DELAY) {
@@ -428,16 +420,13 @@ void InitializeA36926(void) {
   // Initialize the External EEprom
   ETMEEPromConfigureExternalDevice(EEPROM_SIZE_8K_BYTES, FCY_CLK, 400000, EEPROM_I2C_ADDRESS_0, 1);
 
-#define AGILE_REV 77
-#define SERIAL_NUMBER 100
-
   // Initialize the Can module
-  ETMCanSlaveInitialize(CAN_PORT_1, FCY_CLK, ETM_CAN_ADDR_HV_LAMBDA_BOARD, _PIN_RG13, 4);
-  ETMCanSlaveLoadConfiguration(36926, 0, AGILE_REV, FIRMWARE_AGILE_REV, FIRMWARE_BRANCH, FIRMWARE_BRANCH_REV, SERIAL_NUMBER);
+  ETMCanSlaveInitialize(CAN_PORT_1, FCY_CLK, ETM_CAN_ADDR_HV_LAMBDA_BOARD, _PIN_RG13, 4, _PIN_RA7, _PIN_RG12);
+  ETMCanSlaveLoadConfiguration(36926, 0, ETMEEPromReadWord(0x0161), FIRMWARE_AGILE_REV, FIRMWARE_BRANCH, FIRMWARE_BRANCH_REV, ETMEEPromReadWord(0x0160));
 
 
   // Initialize LTC DAC
-  SetupLTC265X(&U1_LTC2654, ETM_SPI_PORT_1, FCY_CLK, LTC265X_SPI_2_5_M_BIT, _PIN_RG15, _PIN_RC1);
+  SetupLTC265X(&U1_LTC2654, ETM_SPI_PORT_2, FCY_CLK, LTC265X_SPI_2_5_M_BIT, _PIN_RG15, _PIN_RC1);
 
 
   // Initialize Digital Input Filters
@@ -618,32 +607,31 @@ void InitializeA36926(void) {
     switch (((startup_counter >> 4) & 0b11)) {
       
     case 0:
-      PIN_LED_OPERATIONAL_GREEN = !OLL_LED_ON;
-      PIN_LED_A_RED = !OLL_LED_ON;
-      PIN_LED_B_GREEN = !OLL_LED_ON;
+      _LATA7 = !OLL_LED_ON;
+      _LATG12 = !OLL_LED_ON;
+      _LATG13 = !OLL_LED_ON;
       break;
       
     case 1:
-      PIN_LED_OPERATIONAL_GREEN = OLL_LED_ON;
-      PIN_LED_A_RED = !OLL_LED_ON;
-      PIN_LED_B_GREEN = !OLL_LED_ON;
+      _LATA7 = OLL_LED_ON;
+      _LATG12 = !OLL_LED_ON;
+      _LATG13 = !OLL_LED_ON;
       break;
       
     case 2:
-      PIN_LED_OPERATIONAL_GREEN = OLL_LED_ON;
-      PIN_LED_A_RED = OLL_LED_ON;
-      PIN_LED_B_GREEN = !OLL_LED_ON;
+      _LATA7 = OLL_LED_ON;
+      _LATG12 = OLL_LED_ON;
+      _LATG13 = !OLL_LED_ON;
       break;
 
     case 3:
-      PIN_LED_OPERATIONAL_GREEN = OLL_LED_ON;
-      PIN_LED_A_RED = OLL_LED_ON;
-      PIN_LED_B_GREEN = OLL_LED_ON;
+      _LATA7 = OLL_LED_ON;
+      _LATG12 = OLL_LED_ON;
+      _LATG13 = OLL_LED_ON;
       break;
     }
   }
   
-  PIN_LED_OPERATIONAL_GREEN = OLL_LED_ON;
 
   PIN_LAMBDA_VOLTAGE_SELECT = OLL_LAMBDA_VOLTAGE_SELECT_LOW_ENERGY;  
 }

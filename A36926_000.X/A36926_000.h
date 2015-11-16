@@ -67,9 +67,10 @@
 #define TEST_POINT_F                 _LATB14
 
 
-#define LED_OPERATIONAL              _LATA7
-#define LED_A_RED                    _LATG12
-#define LED_B_GREEN                  _LATG13
+// These are all managed by the CAN Module
+//#define LED_OPERATIONAL              _LATA7
+//#define LED_A_RED                    _LATG12
+//#define LED_B_GREEN                  _LATG13
 
 
 
