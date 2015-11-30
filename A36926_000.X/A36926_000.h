@@ -129,7 +129,7 @@
 
 #define ILL_HIGH_ENERGY_SELECTED              1
 #define ILL_LAMBDA_AT_EOC                     1
-#define ILL_LAMBDA_NOT_POWERED                1
+#define ILL_LAMBDA_NOT_POWERED                0
 #define ILL_LAMBDA_HV_ON                      1
 #define ILL_LAMBDA_FAULT_ACTIVE               1
 
@@ -258,9 +258,14 @@ typedef struct {
   unsigned int post_pulse_did_not_run_counter;
   unsigned int charge_period_error_counter;
   unsigned int power_up_timer;
-  unsigned int fault_active;
+  //unsigned int fault_active;
   unsigned int power_up_delay_counter;
   unsigned int fault_wait_time;
+  unsigned int pulse_id;
+  unsigned int previous_pulse_id;
+  unsigned int false_trigger_total_count;
+  unsigned int false_trigger_counter;
+  unsigned int false_trigger_timer;
 
   TYPE_DIGITAL_INPUT digital_sum_flt;
   TYPE_DIGITAL_INPUT digital_hv_off;
@@ -290,7 +295,6 @@ extern LambdaControlData global_data_A36926;
 #define STATE_WAITING_FOR_CONFIG     20
 #define STATE_WAITING_FOR_POWER      30
 #define STATE_POWER_UP               40
-#define STATE_POWER_TEST             45
 #define STATE_OPERATE                50
 #define STATE_FAULT_WAIT             55
 #define STATE_FAULT                  60
@@ -300,23 +304,29 @@ extern LambdaControlData global_data_A36926;
 #define DELAY_TCY_5US                FCY_CLK_MHZ*5
 
 
+#define _LOGGED_LAMBDA_NOT_POWERED                      _WARNING_0
+#define _LOGGED_LAMBDA_READBACK_HV_OFF                  _WARNING_1
+#define _LOGGED_LAMBDA_PHASE_LOSS                       _WARNING_2
+#define _LOGGED_LAMBDA_OVER_TEMP                        _WARNING_3
+#define _LOGGED_LAMBDA_INTERLOCK                        _WARNING_4
+#define _LOGGED_LAMBDA_LOAD_FLT                         _WARNING_5
 
-#define _STATUS_LAMBDA_AT_EOC                           _NOT_LOGGED_0
-#define _STATUS_LAMBDA_HIGH_ENERGY                      _NOT_LOGGED_1
-#define _STATUS_LAMBDA_READBACK_HV_OFF                  _WARNING_0
-#define _STATUS_LAMBDA_NOT_POWERED                      _WARNING_1
-#define _STATUS_STATE_FAULT                             _NOT_LOGGED_2
+
+#define _FAULT_CAN_COMMUNICATION_LATCHED                _FAULT_0
+#define _FAULT_LAMBDA_SUM_FAULT                         _FAULT_1
+#define _FAULT_LAMBDA_NOT_POWERED                       _FAULT_2
+#define _FAULT_POWER_UP_TIMEOUT                         _FAULT_3
+#define _FAULT_FALSE_TRIGGER                            _FAULT_4
+
+#define _NOT_LOGGED_LAMBDA_SUM_FAULT                    _NOT_LOGGED_0
+#define _STATUS_LAMBDA_AT_EOC                           _NOT_LOGGED_1
+#define _STATUS_LAMBDA_HIGH_ENERGY                      _NOT_LOGGED_2
 
 
-#define _FAULT_LAMBDA_SUM_FAULT                         _FAULT_0
-#define _FAULT_LAMBDA_NOT_POWERED                       _FAULT_1
-#define _FAULT_LAMBDA_READBACK_HV_OFF                   _FAULT_2
-#define _FAULT_LAMBDA_PHASE_LOSS                        _FAULT_3
-#define _FAULT_LAMBDA_OVER_TEMP                         _FAULT_4
-#define _FAULT_LAMBDA_INTERLOCK                         _FAULT_5
-#define _FAULT_LAMBDA_LOAD_FLT                          _FAULT_6
-#define _FAULT_POWER_UP_TIMEOUT                         _FAULT_7
-#define _FAULT_CAN_COMMUNICATION_LATCHED                _FAULT_8
+
+
+
+
 
 
 
@@ -364,7 +374,7 @@ extern LambdaControlData global_data_A36926;
 
 
 #define POWER_UP_DELAY   500                            // 5 Seconds
-#define TIME_WAIT_FOR_LAMBDA_TO_SET_FAULT_OUTPUTS   10  // 100mS
+#define TIME_WAIT_FOR_LAMBDA_TO_SET_FAULT_OUTPUTS   300  // 1 Seconds
 
 
 
