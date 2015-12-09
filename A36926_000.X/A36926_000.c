@@ -151,19 +151,11 @@ void DoStateMachine(void) {
 void DoPostPulseProcess(void) {
   // Send the pulse data up to the ECB for logging
   if (ETMCanSlaveGetSyncMsgHighSpeedLogging()) {
-    /*
-    ETMCanSlaveLogPulseData(ETM_CAN_DATA_LOG_REGISTER_HV_LAMBDA_FAST_LOG_0,
-			    ETMCanSlaveGetPulseCount(),
-			    global_data_A36926.analog_output_high_energy_vprog.set_point,
-			    global_data_A36926.analog_output_low_energy_vprog.set_point,
-			    global_data_A36926.analog_input_lambda_vpeak.reading_scaled_and_calibrated);
-    */
     ETMCanSlaveLogPulseData(ETM_CAN_DATA_LOG_REGISTER_HV_LAMBDA_FAST_LOG_0,
 			    global_data_A36926.pulse_id,
-			    global_data_A36926.vmon_store_1,  // This is the most recent lambda voltage ADC reading at the end of the chrage period
-			    global_data_A36926.vmon_store_3,  // This is the most recent lambda voltage ADC reading when a pulse is triggered
-			    global_data_A36926.vmon_store_2); // This is the most recent lambda vpeak ADC reading at the end of the chrage period
-    // DPARKER convert these ADC readings into Engineering units with some bit shifting and an ETM scale call
+			    ETMScaleFactor16(global_data_A36926.vmon_store_1 << 4, MACRO_DEC_TO_SCALE_FACTOR_16(VMON_SCALE_FACTOR), OFFSET_ZERO), // This is the most recent lambda voltage ADC reading at the end of the chrage period
+			    ETMScaleFactor16(global_data_A36926.vmon_store_3 << 4, MACRO_DEC_TO_SCALE_FACTOR_16(VMON_SCALE_FACTOR), OFFSET_ZERO), // This is the most recent lambda voltage ADC reading when a pulse is triggered
+			    ETMScaleFactor16(global_data_A36926.vmon_store_2 << 4, MACRO_DEC_TO_SCALE_FACTOR_16(VMON_SCALE_FACTOR), OFFSET_ZERO)); // This is the most recent lambda vpeak ADC reading at the end of the chrage period
     // DPARKER also get better names than vmon_store_X
   }
   
@@ -210,11 +202,11 @@ void DoA36926(void) {
     ETMCanSlaveSetDebugRegister(1, global_data_A36926.analog_input_lambda_vpeak.reading_scaled_and_calibrated);
     ETMCanSlaveSetDebugRegister(2, global_data_A36926.analog_input_lambda_imon.reading_scaled_and_calibrated);
     ETMCanSlaveSetDebugRegister(3, global_data_A36926.analog_input_lambda_heat_sink_temp.reading_scaled_and_calibrated);
-    ETMCanSlaveSetDebugRegister(0x4, global_data_A36926.analog_input_lambda_vmon.filtered_adc_reading);
-    ETMCanSlaveSetDebugRegister(0x5, *(((unsigned int*)&global_data_A36926.analog_input_lambda_vmon.adc_accumulator)-2));
-    ETMCanSlaveSetDebugRegister(0x6, *(((unsigned int*)&global_data_A36926.analog_input_lambda_vmon.adc_accumulator)+0));
-    ETMCanSlaveSetDebugRegister(0x7, global_data_A36926.analog_input_lambda_vmon.adc_accumulator);
-    ETMCanSlaveSetDebugRegister(0x8, (global_data_A36926.analog_input_lambda_vmon.adc_accumulator >> 16));
+    ETMCanSlaveSetDebugRegister(0x4, slave_board_data.local_data[0]);
+    ETMCanSlaveSetDebugRegister(0x5, slave_board_data.local_data[1]);
+    ETMCanSlaveSetDebugRegister(0x6, slave_board_data.local_data[2]);
+    ETMCanSlaveSetDebugRegister(0x7, slave_board_data.local_data[3]);
+    ETMCanSlaveSetDebugRegister(0x8, ETMCanSlaveGetPulseCount());
     ETMCanSlaveSetDebugRegister(0x9, post_pulse_process_count);
     /*
     ETMCanSlaveSetDebugRegister(0x0, ADCBUF0);
@@ -385,7 +377,7 @@ void UpdateFaultsAndStatusBits(void) {
   }
   
   if (global_data_A36926.false_trigger_counter >= FALSE_TRIGGER_TRIP_POINT) {
-    _FAULT_FALSE_TRIGGER = 1;
+    //_FAULT_FALSE_TRIGGER = 1;
   } 
 }
     
