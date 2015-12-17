@@ -70,9 +70,10 @@ void DoStateMachine(void) {
     while (global_data_A36926.control_state == STATE_WAITING_FOR_POWER) {
       DoA36926();
       
-      if (ETMDigitalFilteredOutput(&global_data_A36926.digital_hv_not_powered) != ILL_LAMBDA_NOT_POWERED) {
+      if (!ETMCanSlaveGetSyncMsgSystemHVDisable()) {
 	global_data_A36926.control_state = STATE_POWER_UP;
       }
+
       if (_FAULT_REGISTER != 0) {
 	global_data_A36926.control_state = STATE_FAULT_WAIT;
       } 
@@ -88,14 +89,14 @@ void DoStateMachine(void) {
     while (global_data_A36926.control_state == STATE_POWER_UP) {
       DoA36926();
       
-      if ((global_data_A36926.power_up_delay_counter >= POWER_UP_DELAY) && (_STATUS_LAMBDA_AT_EOC == 0)) {
-	_FAULT_POWER_UP_TIMEOUT = 1;
-      }
-      
-      if ((global_data_A36926.power_up_delay_counter >= POWER_UP_DELAY) && (_STATUS_LAMBDA_AT_EOC)) {
+      if ((global_data_A36926.power_up_delay_counter >= POWER_UP_DELAY)) {
 	global_data_A36926.control_state = STATE_OPERATE;
+      }      
+
+      if (ETMCanSlaveGetSyncMsgSystemHVDisable()) {
+	global_data_A36926.control_state = STATE_WAITING_FOR_POWER;
       }
-      
+
       if (_FAULT_REGISTER != 0) {
 	global_data_A36926.control_state = STATE_FAULT_WAIT;
       }
@@ -106,6 +107,10 @@ void DoStateMachine(void) {
     _CONTROL_NOT_READY = 0;
     while (global_data_A36926.control_state == STATE_OPERATE) {
       DoA36926();
+      
+      if (ETMCanSlaveGetSyncMsgSystemHVDisable()) {
+	global_data_A36926.control_state = STATE_WAITING_FOR_POWER;
+      }
       
       if (_FAULT_REGISTER != 0) {
 	global_data_A36926.control_state = STATE_FAULT_WAIT;
@@ -134,7 +139,7 @@ void DoStateMachine(void) {
     while (global_data_A36926.control_state == STATE_FAULT) {
       DoA36926();
 
-      if ((PIN_LAMBDA_NOT_POWERED == ILL_LAMBDA_NOT_POWERED) && (ETMCanSlaveGetSyncMsgResetEnable())) {
+      if (ETMCanSlaveGetSyncMsgResetEnable()) {
 	global_data_A36926.control_state = STATE_WAITING_FOR_CONFIG;
       }
     }
@@ -197,7 +202,6 @@ void DoA36926(void) {
     
 
     // Update debugging information
-
     ETMCanSlaveSetDebugRegister(0, global_data_A36926.analog_input_lambda_vmon.reading_scaled_and_calibrated);
     ETMCanSlaveSetDebugRegister(1, global_data_A36926.analog_input_lambda_vpeak.reading_scaled_and_calibrated);
     ETMCanSlaveSetDebugRegister(2, global_data_A36926.analog_input_lambda_imon.reading_scaled_and_calibrated);
@@ -208,17 +212,6 @@ void DoA36926(void) {
     ETMCanSlaveSetDebugRegister(0x7, slave_board_data.local_data[3]);
     ETMCanSlaveSetDebugRegister(0x8, ETMCanSlaveGetPulseCount());
     ETMCanSlaveSetDebugRegister(0x9, post_pulse_process_count);
-    /*
-    ETMCanSlaveSetDebugRegister(0x0, ADCBUF0);
-    ETMCanSlaveSetDebugRegister(0x1, ADCBUF1);
-    ETMCanSlaveSetDebugRegister(0x2, ADCBUF2);
-    ETMCanSlaveSetDebugRegister(0x3, ADCBUF3);
-    ETMCanSlaveSetDebugRegister(0x4, ADCBUF4);
-    ETMCanSlaveSetDebugRegister(0x5, ADCBUF5);
-    ETMCanSlaveSetDebugRegister(0x6, ADCBUF6);
-    ETMCanSlaveSetDebugRegister(0x7, ADCBUF7);
-    */
-
     ETMCanSlaveSetDebugRegister(0xF, global_data_A36926.control_state);
 
 
@@ -247,15 +240,12 @@ void DoA36926(void) {
       }
     }
 
-
     // Do Math on the ADC inputs
     ETMAnalogScaleCalibrateADCReading(&global_data_A36926.analog_input_lambda_vmon);
     ETMAnalogScaleCalibrateADCReading(&global_data_A36926.analog_input_lambda_vpeak);
     ETMAnalogScaleCalibrateADCReading(&global_data_A36926.analog_input_lambda_imon);
     ETMAnalogScaleCalibrateADCReading(&global_data_A36926.analog_input_lambda_heat_sink_temp);
     
-    
-    global_data_A36926.no_pulse_counter++;
     
     if (global_data_A36926.control_state != STATE_OPERATE) {
       // Update the HV Lambda Program Values
@@ -267,6 +257,7 @@ void DoA36926(void) {
       
       
     } else {
+      global_data_A36926.no_pulse_counter++;
       if (global_data_A36926.no_pulse_counter >= HV_ON_LAMBDA_SET_POINT_REFRESH_RATE_WHEN_NOT_PULSING) {
 	// A long time has passed without updating the Lambda Set points
 	// Update the HV Lambda Program Values
@@ -378,6 +369,7 @@ void UpdateFaultsAndStatusBits(void) {
   
   if (global_data_A36926.false_trigger_counter >= FALSE_TRIGGER_TRIP_POINT) {
     //_FAULT_FALSE_TRIGGER = 1;
+    // DPARKER - Fix the false trigger detection
   } 
 }
     
@@ -726,7 +718,7 @@ void __attribute__((interrupt, no_auto_psv)) _ADCInterrupt(void) {
       
       if (global_data_A36926.store_lambda_voltage) {
 	global_data_A36926.vmon_store_1 = ADCBUF0;
-	global_data_A36926.vmon_store_2 = ADCBUF1;
+	// DPARKER global_data_A36926.vmon_store_2 = ADCBUF1;
 	global_data_A36926.store_lambda_voltage = 0;
       }
     } else {
@@ -745,7 +737,7 @@ void __attribute__((interrupt, no_auto_psv)) _ADCInterrupt(void) {
 
       if (global_data_A36926.store_lambda_voltage) {
 	global_data_A36926.vmon_store_1 = ADCBUF8;
-	global_data_A36926.vmon_store_2 = ADCBUF9;
+	// DPARKER global_data_A36926.vmon_store_2 = ADCBUF9;
 	global_data_A36926.store_lambda_voltage = 0;
       }
     }
@@ -805,8 +797,10 @@ void __attribute__((interrupt, shadow, no_auto_psv)) _INT3Interrupt(void) {
   
   if (_BUFS) {
     global_data_A36926.vmon_store_3 = ADCBUF0;
+    global_data_A36926.vmon_store_2 = ADCBUF3;
   } else {
     global_data_A36926.vmon_store_3 = ADCBUF8;
+    global_data_A36926.vmon_store_2 = ADCBUFB;
   }
 
   // Setup timer1 to time the inhibit period
