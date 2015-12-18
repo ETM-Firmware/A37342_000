@@ -4,6 +4,13 @@
 //#include "ETM_EEPROM.h"
 
 
+// Changes for working through a reset
+unsigned int running_persistent __attribute__ ((persistent));
+unsigned int do_fast_startup;
+unsigned int setup_done;
+#define PERSISTENT_TEST 0xCFD1
+
+
 unsigned int post_pulse_process_count;
 
 // This is firmware for the HV Lambda Board
@@ -43,17 +50,42 @@ void DoStateMachine(void) {
   switch (global_data_A36926.control_state) {
     
   case STATE_STARTUP:
+    if (running_persistent == PERSISTENT_TEST) {
+      do_fast_startup = 1;
+    } else {
+      do_fast_startup = 0;
+    }
+    running_persistent = 0;
     InitializeA36926();
-    DisableHVLambda();
     _CONTROL_NOT_CONFIGURED = 1;
     _CONTROL_NOT_READY = 1;
     global_data_A36926.control_state = STATE_WAITING_FOR_CONFIG;
+    if (do_fast_startup) {
+      ETMDigitalInitializeInput(&global_data_A36926.digital_hv_not_powered , !ILL_LAMBDA_NOT_POWERED, 30);
+      _CONTROL_NOT_READY = 0;
+      _FAULT_REGISTER = 0;
+      EnableHVLambda();
+      _CONTROL_NOT_CONFIGURED = 0;
+      setup_done = 0;
+      while (setup_done == 0) {
+	DoA36926();
+      }
+      // Now you can update the DACs
+      ETMAnalogScaleCalibrateDACSetting(&global_data_A36926.analog_output_high_energy_vprog);
+      ETMAnalogScaleCalibrateDACSetting(&global_data_A36926.analog_output_low_energy_vprog);
+      SetupLTC265X(&U1_LTC2654, ETM_SPI_PORT_2, FCY_CLK, LTC265X_SPI_2_5_M_BIT, _PIN_RG15, _PIN_RC1);
+      WriteLTC265XTwoChannels(&U1_LTC2654,
+			      LTC265X_WRITE_AND_UPDATE_DAC_C, global_data_A36926.analog_output_high_energy_vprog.dac_setting_scaled_and_calibrated,
+			      LTC265X_WRITE_AND_UPDATE_DAC_D, global_data_A36926.analog_output_low_energy_vprog.dac_setting_scaled_and_calibrated);
+      global_data_A36926.control_state = STATE_OPERATE;
+    }
     break;
 
     
   case STATE_WAITING_FOR_CONFIG:
     DisableHVLambda();
     _CONTROL_NOT_READY = 1;
+    running_persistent = 0;
     while (global_data_A36926.control_state == STATE_WAITING_FOR_CONFIG) {
       DoA36926();
       if (_CONTROL_NOT_CONFIGURED == 0) {
@@ -67,6 +99,7 @@ void DoStateMachine(void) {
     DisableHVLambda();
     _CONTROL_NOT_READY = 1;
     _FAULT_REGISTER = 0;
+    running_persistent = 0;
     while (global_data_A36926.control_state == STATE_WAITING_FOR_POWER) {
       DoA36926();
       
@@ -86,6 +119,7 @@ void DoStateMachine(void) {
     EnableHVLambda();
     _CONTROL_NOT_READY = 1;
     global_data_A36926.power_up_delay_counter = 0;
+    running_persistent = 0;
     while (global_data_A36926.control_state == STATE_POWER_UP) {
       DoA36926();
       
@@ -105,6 +139,7 @@ void DoStateMachine(void) {
 
   case STATE_OPERATE:
     _CONTROL_NOT_READY = 0;
+    running_persistent = PERSISTENT_TEST;
     while (global_data_A36926.control_state == STATE_OPERATE) {
       DoA36926();
       
@@ -123,6 +158,7 @@ void DoStateMachine(void) {
     DisableHVLambda();
     _CONTROL_NOT_READY = 1;
     global_data_A36926.fault_wait_time = 0;
+    running_persistent = 0;
     while (global_data_A36926.control_state == STATE_FAULT_WAIT) {
       DoA36926();
 
@@ -136,6 +172,7 @@ void DoStateMachine(void) {
   case STATE_FAULT:
     DisableHVLambda();
     _CONTROL_NOT_READY = 1;
+    running_persistent = 0;
     while (global_data_A36926.control_state == STATE_FAULT) {
       DoA36926();
 
@@ -434,9 +471,13 @@ void InitializeA36926(void) {
   ETMCanSlaveLoadConfiguration(36926, 0, FIRMWARE_AGILE_REV, FIRMWARE_BRANCH, FIRMWARE_BRANCH_REV);
 
 
-  // Initialize LTC DAC
-  SetupLTC265X(&U1_LTC2654, ETM_SPI_PORT_2, FCY_CLK, LTC265X_SPI_2_5_M_BIT, _PIN_RG15, _PIN_RC1);
-
+  if (do_fast_startup) {
+    EnableHVLambda();
+  } else {
+    // Initialize LTC DAC
+    SetupLTC265X(&U1_LTC2654, ETM_SPI_PORT_2, FCY_CLK, LTC265X_SPI_2_5_M_BIT, _PIN_RG15, _PIN_RC1);
+    DisableHVLambda();
+  }
 
   // Initialize Digital Input Filters
   ETMDigitalInitializeInput(&global_data_A36926.digital_hv_not_powered , ILL_LAMBDA_NOT_POWERED, 30);
@@ -604,40 +645,41 @@ void InitializeA36926(void) {
   _ADIE = 1;
   _ADON = 1;
 
-
-  // Flash LEDs at Startup
-  startup_counter = 0;
-  while (startup_counter <= 400) {  // 4 Seconds total
-    ETMCanSlaveDoCan();
-    if (_T3IF) {
-      _T3IF =0;
-      startup_counter++;
-    } 
-    switch (((startup_counter >> 4) & 0b11)) {
-      
-    case 0:
-      _LATA7 = !OLL_LED_ON;
-      _LATG12 = !OLL_LED_ON;
-      _LATG13 = !OLL_LED_ON;
-      break;
-      
-    case 1:
-      _LATA7 = OLL_LED_ON;
-      _LATG12 = !OLL_LED_ON;
-      _LATG13 = !OLL_LED_ON;
-      break;
-      
-    case 2:
-      _LATA7 = OLL_LED_ON;
-      _LATG12 = OLL_LED_ON;
-      _LATG13 = !OLL_LED_ON;
-      break;
-
-    case 3:
-      _LATA7 = OLL_LED_ON;
-      _LATG12 = OLL_LED_ON;
-      _LATG13 = OLL_LED_ON;
-      break;
+  if (!do_fast_startup) {
+    // Flash LEDs at Startup
+    startup_counter = 0;
+    while (startup_counter <= 400) {  // 4 Seconds total
+      ETMCanSlaveDoCan();
+      if (_T3IF) {
+	_T3IF =0;
+	startup_counter++;
+      } 
+      switch (((startup_counter >> 4) & 0b11)) {
+	
+      case 0:
+	_LATA7 = !OLL_LED_ON;
+	_LATG12 = !OLL_LED_ON;
+	_LATG13 = !OLL_LED_ON;
+	break;
+	
+      case 1:
+	_LATA7 = OLL_LED_ON;
+	_LATG12 = !OLL_LED_ON;
+	_LATG13 = !OLL_LED_ON;
+	break;
+	
+      case 2:
+	_LATA7 = OLL_LED_ON;
+	_LATG12 = OLL_LED_ON;
+	_LATG13 = !OLL_LED_ON;
+	break;
+	
+      case 3:
+	_LATA7 = OLL_LED_ON;
+	_LATG12 = OLL_LED_ON;
+	_LATG13 = OLL_LED_ON;
+	break;
+      }
     }
   }
   
@@ -904,6 +946,7 @@ void ETMCanSlaveExecuteCMDBoardSpecific(ETMCanMessage* message_ptr) {
       ETMAnalogSetOutput(&global_data_A36926.analog_output_high_energy_vprog, message_ptr->word1); 
       ETMAnalogSetOutput(&global_data_A36926.analog_output_low_energy_vprog,message_ptr->word2);
       _CONTROL_NOT_CONFIGURED = 0;
+      setup_done = 1;
       break;
       
     default:
