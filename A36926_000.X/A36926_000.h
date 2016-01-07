@@ -190,17 +190,17 @@
   This sets up the ADC to work as following
   AUTO Sampeling
   External Vref+/Vref-
-  With 10MHz System Clock, ADC Clock is 450ns (4.5 clocks per ADC clock), Sample Time is 6 ADC Clock so total sample time is 9.0uS
-  Conversion rate of 111KHz (13.888 Khz per Channel), 138 Samples per 10mS interrupt
-  8 Samples per Interrupt, use alternating buffers
+  With 10MHz System Clock, ADC Clock is 450ns (4.5 clocks per ADC clock), Sample Time is 4 ADC Clock
+  Total Conversion time is 18 TAD = 8.1uS
+  6 Samples per Interrupt, use alternating buffers
   Scan Through Selected Inputs
 */
 
 #define ADCON1_SETTING  (ADC_MODULE_OFF & ADC_IDLE_STOP & ADC_FORMAT_INTG & ADC_CLK_AUTO & ADC_AUTO_SAMPLING_ON)
-#define ADCON2_SETTING  (ADC_VREF_EXT_EXT & ADC_SCAN_ON & ADC_SAMPLES_PER_INT_8 & ADC_ALT_BUF_ON & ADC_ALT_INPUT_OFF)
+#define ADCON2_SETTING  (ADC_VREF_EXT_EXT & ADC_SCAN_ON & ADC_SAMPLES_PER_INT_6 & ADC_ALT_BUF_ON & ADC_ALT_INPUT_ON)
 #define ADCHS_SETTING   (ADC_CH0_POS_SAMPLEA_AN2 & ADC_CH0_NEG_SAMPLEA_VREFN & ADC_CH0_POS_SAMPLEB_AN2 & ADC_CH0_NEG_SAMPLEB_VREFN)
 #define ADPCFG_SETTING  (ENABLE_AN2_ANA & ENABLE_AN3_ANA & ENABLE_AN4_ANA & ENABLE_AN5_ANA & ENABLE_AN6_ANA & ENABLE_AN7_ANA & ENABLE_AN8_ANA & ENABLE_AN9_ANA)
-#define ADCSSL_SETTING  (SKIP_SCAN_AN0 & SKIP_SCAN_AN1 & SKIP_SCAN_AN10 & SKIP_SCAN_AN11 & SKIP_SCAN_AN12 & SKIP_SCAN_AN13 & SKIP_SCAN_AN14 & SKIP_SCAN_AN15)
+#define ADCSSL_SETTING  (SKIP_SCAN_AN0 & SKIP_SCAN_AN1 & SKIP_SCAN_AN2 & SKIP_SCAN_AN6 & SKIP_SCAN_AN7 & SKIP_SCAN_AN8 & SKIP_SCAN_AN9 & SKIP_SCAN_AN10 & SKIP_SCAN_AN11 & SKIP_SCAN_AN12 & SKIP_SCAN_AN13 & SKIP_SCAN_AN14 & SKIP_SCAN_AN15)
 #define ADCON3_SETTING  (ADC_SAMPLE_TIME_4 & ADC_CONV_CLK_SYSTEM & ADC_CONV_CLK_9Tcy2)
 
 /* 
@@ -214,7 +214,7 @@
 #define TMR1_LAMBDA_CHARGE_TIME_US     LAMBDA_MAX_CHARGE_TIME_US
 #define TMR1_DELAY_HOLDOFF             (FCY_CLK_MHZ*TMR1_DELAY_HOLDOFF_US/8)    
 #define TMR1_LAMBDA_CHARGE_PERIOD      (FCY_CLK_MHZ*TMR1_LAMBDA_CHARGE_TIME_US/8)
-#define TMR1_RETRIGGER_BLANK           (FCY_CLK_MHZ*RETRIGGER_BLANKING_US/8)
+//#define TMR1_RETRIGGER_BLANK           (FCY_CLK_MHZ*RETRIGGER_BLANKING_US/8)
 
 
 
@@ -281,9 +281,9 @@ typedef struct {
   //unsigned int phase_loss_counter;
   //unsigned int lambda_not_powered_counter;
 
-  unsigned int vmon_store_1;
-  unsigned int vmon_store_2;
-  unsigned int vmon_store_3;
+  unsigned int vmon_at_eoc_period;
+  unsigned int vmon_pre_pulse;
+  unsigned int vprog_pre_pulse;
   unsigned int store_lambda_voltage;
 } LambdaControlData;
 
@@ -365,9 +365,9 @@ extern LambdaControlData global_data_A36926;
 
 
 
-#define LAMBDA_HOLDOFF_TIME_US         700        // 400 uS
+#define LAMBDA_HOLDOFF_TIME_US         600        // 400 uS
 #define LAMBDA_MAX_CHARGE_TIME_US      2400      // 2.4mS
-#define RETRIGGER_BLANKING_US          1100       // 500us
+//#define RETRIGGER_BLANKING_US          1100       // 1100uSus
 
 
 #define HV_ON_LAMBDA_SET_POINT_REFRESH_RATE_WHEN_NOT_PULSING            200             // 2 seconds

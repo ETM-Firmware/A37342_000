@@ -10,6 +10,10 @@ unsigned int do_fast_startup;
 unsigned int setup_done;
 #define PERSISTENT_TEST 0xCFD1
 
+volatile unsigned int adc_mirror[16];
+volatile unsigned int adc_mirror_latest_update;
+volatile unsigned int store_next_vmon_reading;
+
 
 unsigned int post_pulse_process_count;
 
@@ -195,14 +199,11 @@ void DoPostPulseProcess(void) {
   if (ETMCanSlaveGetSyncMsgHighSpeedLogging()) {
     ETMCanSlaveLogPulseData(ETM_CAN_DATA_LOG_REGISTER_HV_LAMBDA_FAST_LOG_0,
 			    global_data_A36926.pulse_id,
-			    ETMScaleFactor16(global_data_A36926.vmon_store_1 << 4, MACRO_DEC_TO_SCALE_FACTOR_16(VMON_SCALE_FACTOR), OFFSET_ZERO), // This is the most recent lambda voltage ADC reading at the end of the chrage period
-			    ETMScaleFactor16(global_data_A36926.vmon_store_3 << 4, MACRO_DEC_TO_SCALE_FACTOR_16(VMON_SCALE_FACTOR), OFFSET_ZERO), // This is the most recent lambda voltage ADC reading when a pulse is triggered
-			    ETMScaleFactor16(global_data_A36926.vmon_store_2 << 4, MACRO_DEC_TO_SCALE_FACTOR_16(VMON_SCALE_FACTOR), OFFSET_ZERO)); // This is the most recent lambda vpeak ADC reading at the end of the chrage period
-    // DPARKER also get better names than vmon_store_X
+			    ETMScaleFactor16(global_data_A36926.vmon_at_eoc_period << 4, MACRO_DEC_TO_SCALE_FACTOR_16(VMON_SCALE_FACTOR), OFFSET_ZERO), // This is the most recent lambda voltage ADC reading at the end of the chrage period
+			    ETMScaleFactor16(global_data_A36926.vmon_pre_pulse << 4, MACRO_DEC_TO_SCALE_FACTOR_16(VMON_SCALE_FACTOR), OFFSET_ZERO), // This is the most recent lambda voltage ADC reading when a pulse is triggered
+			    ETMScaleFactor16(global_data_A36926.vprog_pre_pulse << 4, MACRO_DEC_TO_SCALE_FACTOR_16(VMON_SCALE_FACTOR), OFFSET_ZERO)); // This is the most recent lambda vprog ADC reading at pulse
   }
   
-  
-
   // Update the HV Lambda Program Values
   ETMAnalogScaleCalibrateDACSetting(&global_data_A36926.analog_output_high_energy_vprog);
   ETMAnalogScaleCalibrateDACSetting(&global_data_A36926.analog_output_low_energy_vprog);
@@ -386,7 +387,7 @@ void UpdateFaultsAndStatusBits(void) {
   // Update fault bits if the lambda should be running
   if ((global_data_A36926.control_state == STATE_OPERATE) || (global_data_A36926.control_state == STATE_FAULT_WAIT)) {
     if (_NOT_LOGGED_LAMBDA_SUM_FAULT) {
-      _FAULT_LAMBDA_SUM_FAULT = 1;
+      //DPARKER FIX _FAULT_LAMBDA_SUM_FAULT = 1;
     }
 
     if (_LOGGED_LAMBDA_NOT_POWERED) {
@@ -737,7 +738,26 @@ void DisableHVLambda(void) {
 
 
 void __attribute__((interrupt, no_auto_psv)) _ADCInterrupt(void) {
+  /*
+    Buffer Data
+    BUF0/BUF8 = Vpeak
+    BUF1/BUF9 = Vmon
+    BUF2/BUFA = Imon
+    BUF3/BUFB = Vmon
+    BUF4/BUFC = Vprog
+    BUF5/BUFD = Vmon
+  */
+
   _ADIF = 0;
+
+  if (store_next_vmon_reading) {
+    store_next_vmon_reading = 0;
+    if (_BUFS) {
+      global_data_A36926.vmon_at_eoc_period = ADCBUF5;
+    } else {
+      global_data_A36926.vmon_at_eoc_period = ADCBUFD;
+    }
+  }
   
   if (global_data_A36926.adc_ignore_current_sample) {
     // There was a pulse durring the sample sequence.  Throw the data away!!!
@@ -746,44 +766,32 @@ void __attribute__((interrupt, no_auto_psv)) _ADCInterrupt(void) {
     // Copy Data From Buffer to RAM
     if (_BUFS) {
       // read ADCBUF 0-7
-      global_data_A36926.analog_input_lambda_vmon.adc_accumulator           += ADCBUF0;
-      global_data_A36926.analog_input_lambda_vpeak.adc_accumulator          += ADCBUF1;
+      global_data_A36926.analog_input_lambda_vpeak.adc_accumulator          += ADCBUF0;
+      global_data_A36926.analog_input_lambda_vmon.adc_accumulator           += ADCBUF1;
       global_data_A36926.analog_input_lambda_imon.adc_accumulator           += ADCBUF2;
-      global_data_A36926.analog_input_lambda_heat_sink_temp.adc_accumulator += ADCBUF3;
-      
-      global_data_A36926.analog_input_15v_mon.adc_accumulator               += ADCBUF4;
-      global_data_A36926.analog_input_neg_15v_mon.adc_accumulator           += ADCBUF5;
-      global_data_A36926.analog_input_5v_mon.adc_accumulator                += ADCBUF6;
-      global_data_A36926.analog_input_pic_adc_test_dac.adc_accumulator      += ADCBUF7;
+      global_data_A36926.analog_input_lambda_heat_sink_temp.adc_accumulator += ADCBUF4;
+      global_data_A36926.accumulator_counter++;
 
-      global_data_A36926.accumulator_counter++ ;
-      
-      if (global_data_A36926.store_lambda_voltage) {
-	global_data_A36926.vmon_store_1 = ADCBUF0;
-	// DPARKER global_data_A36926.vmon_store_2 = ADCBUF1;
-	global_data_A36926.store_lambda_voltage = 0;
-      }
+      adc_mirror[0x1] = ADCBUF1;
+      adc_mirror[0x3] = ADCBUF3;
+      adc_mirror[0x4] = ADCBUF4;
+      adc_mirror[0x5] = ADCBUF5;
+      adc_mirror_latest_update = 1;
     } else {
       // read ADCBUF 8-15
-      global_data_A36926.analog_input_lambda_vmon.adc_accumulator           += ADCBUF8;
-      global_data_A36926.analog_input_lambda_vpeak.adc_accumulator          += ADCBUF9;
+      global_data_A36926.analog_input_lambda_vpeak.adc_accumulator          += ADCBUF8;
+      global_data_A36926.analog_input_lambda_vmon.adc_accumulator           += ADCBUF9;
       global_data_A36926.analog_input_lambda_imon.adc_accumulator           += ADCBUFA;
-      global_data_A36926.analog_input_lambda_heat_sink_temp.adc_accumulator += ADCBUFB;
-      
-      global_data_A36926.analog_input_15v_mon.adc_accumulator               += ADCBUFC;
-      global_data_A36926.analog_input_neg_15v_mon.adc_accumulator           += ADCBUFD;
-      global_data_A36926.analog_input_5v_mon.adc_accumulator                += ADCBUFE;
-      global_data_A36926.analog_input_pic_adc_test_dac.adc_accumulator      += ADCBUFF;
+      global_data_A36926.analog_input_lambda_heat_sink_temp.adc_accumulator += ADCBUFC;
+      global_data_A36926.accumulator_counter++;
 
-      global_data_A36926.accumulator_counter++ ;
-
-      if (global_data_A36926.store_lambda_voltage) {
-	global_data_A36926.vmon_store_1 = ADCBUF8;
-	// DPARKER global_data_A36926.vmon_store_2 = ADCBUF9;
-	global_data_A36926.store_lambda_voltage = 0;
-      }
+      adc_mirror[0x9] = ADCBUF9;
+      adc_mirror[0xB] = ADCBUFB;
+      adc_mirror[0xC] = ADCBUFC;
+      adc_mirror[0xD] = ADCBUFD;
+      adc_mirror_latest_update = 0;
     }
-
+    
     
     if (global_data_A36926.accumulator_counter >= 128) {
 
@@ -827,7 +835,17 @@ void __attribute__((interrupt, no_auto_psv)) _ADCInterrupt(void) {
 }
 
 
-void __attribute__((interrupt, shadow, no_auto_psv)) _INT3Interrupt(void) {
+void __attribute__((__interrupt__(__preprologue__("BCLR LATD, #0")), shadow, no_auto_psv)) _INT3Interrupt(void) {
+  unsigned int adc_mirror_19;
+  unsigned int adc_mirror_3B;
+  unsigned int adc_mirror_5D;
+  
+  unsigned int latest_adc_reading_B3;
+  unsigned int latest_adc_reading_D5;
+  unsigned int latest_adc_reading_19;
+  unsigned int latest_adc_reading_3B;
+  unsigned int latest_adc_reading_5D;
+  
   /*    
     Assuming a sucessful trigger, this interupt will do the following conecptual steps
     (1) Inhibit the HV supply a set amount of time.
@@ -836,15 +854,35 @@ void __attribute__((interrupt, shadow, no_auto_psv)) _INT3Interrupt(void) {
   */ 
   
   PIN_LAMBDA_INHIBIT = OLL_INHIBIT_LAMBDA;
-  
-  if (_BUFS) {
-    global_data_A36926.vmon_store_3 = ADCBUF0;
-    global_data_A36926.vmon_store_2 = ADCBUF3;
-  } else {
-    global_data_A36926.vmon_store_3 = ADCBUF8;
-    global_data_A36926.vmon_store_2 = ADCBUFB;
-  }
 
+  if (adc_mirror_latest_update) {
+    // The ADC is currently filling 0x8 - 0xF
+    latest_adc_reading_B3 = adc_mirror[0x3];
+    latest_adc_reading_D5 = adc_mirror[0x5];
+    latest_adc_reading_19 = ADCBUF9;
+    latest_adc_reading_3B = ADCBUFB;
+    latest_adc_reading_5D = ADCBUFD;
+    
+    adc_mirror_19 = adc_mirror[0x9];
+    adc_mirror_3B = adc_mirror[0xB];
+    adc_mirror_5D = adc_mirror[0xD];
+    
+    global_data_A36926.vprog_pre_pulse = adc_mirror[0xC];
+  } else {
+    // The ADC is currently filling 0x0 - 0x7
+    latest_adc_reading_B3 = adc_mirror[0xB];
+    latest_adc_reading_D5 = adc_mirror[0xD];
+    latest_adc_reading_19 = ADCBUF1;
+    latest_adc_reading_3B = ADCBUF3;
+    latest_adc_reading_5D = ADCBUF5;
+
+    adc_mirror_19 = adc_mirror[0x1];
+    adc_mirror_3B = adc_mirror[0x3];
+    adc_mirror_5D = adc_mirror[0x5];
+
+    global_data_A36926.vprog_pre_pulse = adc_mirror[0x4];
+  }
+  
   // Setup timer1 to time the inhibit period
   T1CONbits.TON = 0;
   TMR1 = 0;
@@ -873,6 +911,40 @@ void __attribute__((interrupt, shadow, no_auto_psv)) _INT3Interrupt(void) {
   
   _T1IE = 0;
   
+
+  if (latest_adc_reading_3B == adc_mirror_3B) {
+    // Either ADCBUF3/B has not been updated yet (or the value did not change over the previous 12 samples in which case we can use any value)
+    if (latest_adc_reading_19 == adc_mirror_19) {
+      // We have not updated ADCBUF1/9 yet (or again the value did not change in which case any value is valid)
+      //global_data_A36926.vmon_pre_pulse = latest_adc_reading_D5; // This sample is (32 TAD -> 50 TAD) Old
+      global_data_A36926.vmon_pre_pulse = latest_adc_reading_B3; // This sample is (68 TAD -> 86 TAD) Old
+    } else {
+      // We have updated ADCBUF1/9 
+      global_data_A36926.vmon_pre_pulse = latest_adc_reading_D5; // This sample is (50 TAD -> 86 TAD) Old
+      //if (latest_adc_reading_19 < latest_adc_reading_D5) {
+      //global_data_A36926.vmon_pre_pulse = latest_adc_reading_D5; // This sample is (50 TAD -> 86 TAD) Old
+      //} else {
+      //global_data_A36926.vmon_pre_pulse = latest_adc_reading_19; // This sample is (14 TAD -> 50 TAD) OLD
+      //}
+    }
+  } else {
+    // ADCBUF3/B has been updated
+    if (latest_adc_reading_5D == adc_mirror_5D) {
+      // We have not updated ADCBUF5/D yet (or the value did not change in which case any value is valid)
+      //global_data_A36926.vmon_pre_pulse = latest_adc_reading_3B; // This sample is (32 TAD -> 50 TAD) Old
+      global_data_A36926.vmon_pre_pulse = latest_adc_reading_19; // This sample is (68 TAD -> 86 TAD) Old 
+    } else {
+      // We have updated ADCBUF5/D
+      global_data_A36926.vmon_pre_pulse = latest_adc_reading_3B; // This sample is (50 TAD -> 86 TAD) Old
+      //if (latest_adc_reading_5D < latest_adc_reading_3B) {
+      //global_data_A36926.vmon_pre_pulse = latest_adc_reading_3B; // This sample is (50 TAD -> 86 TAD) Old
+      //} else {
+      //global_data_A36926.vmon_pre_pulse = latest_adc_reading_5D; // This sample is (14 TAD -> 50 TAD) OLD
+      //}
+    } 
+  }
+  
+
   while(!_T1IF);                                                   // what for the holdoff time to pass
 
   // We need to guarantee that we start charging to the low energy mode voltage until we get a command to charge to high energ
@@ -902,6 +974,17 @@ void __attribute__((interrupt, shadow, no_auto_psv)) _INT3Interrupt(void) {
 
 
 void __attribute__((interrupt, no_auto_psv)) _T1Interrupt(void) {
+  unsigned int adc_mirror_19;
+  unsigned int adc_mirror_3B;
+  unsigned int adc_mirror_5D;
+
+  unsigned int latest_adc_reading_B3;
+  unsigned int latest_adc_reading_D5;
+  unsigned int latest_adc_reading_19;
+  unsigned int latest_adc_reading_3B;
+  unsigned int latest_adc_reading_5D;
+
+
   /*
     This interrupt indicates that the cap charger should have finished charging and it is time to enable the trigger pulse.
 
@@ -913,8 +996,63 @@ void __attribute__((interrupt, no_auto_psv)) _T1Interrupt(void) {
   _T1IF = 0;         // Clear the interrupt flag
   _T1IE = 0;         // Disable the interrupt (This will be enabled the next time that a capacitor charging sequence starts)
   T1CONbits.TON = 0;   // Stop the timer from incrementing (Again this will be restarted with the next time the capacitor charge sequence starts)
-  global_data_A36926.store_lambda_voltage = 1;
 
+  // request the next vmon_adc_reading be stored.
+  //store_next_vmon_reading = 1;
+
+  // Save the most recent vmon adc reading
+  _ADIE = 0;
+  // NEED to prevent updates to adc_mirror or it could overwrite calculation
+  if (adc_mirror_latest_update) {
+    // The ADC is currently filling 0x8 - 0xF
+    latest_adc_reading_B3 = adc_mirror[0x3];
+    latest_adc_reading_D5 = adc_mirror[0x5];
+    latest_adc_reading_19 = ADCBUF9;
+    latest_adc_reading_3B = ADCBUFB;
+    latest_adc_reading_5D = ADCBUFD;
+    
+    adc_mirror_19 = adc_mirror[0x9];
+    adc_mirror_3B = adc_mirror[0xB];
+    adc_mirror_5D = adc_mirror[0xD];
+  } else {
+    // The ADC is currently filling 0x0 - 0x7
+    latest_adc_reading_B3 = adc_mirror[0xB];
+    latest_adc_reading_D5 = adc_mirror[0xD];
+    latest_adc_reading_19 = ADCBUF1;
+    latest_adc_reading_3B = ADCBUF3;
+    latest_adc_reading_5D = ADCBUF5;
+
+    adc_mirror_19 = adc_mirror[0x1];
+    adc_mirror_3B = adc_mirror[0x3];
+    adc_mirror_5D = adc_mirror[0x5];
+  }
+  _ADIE = 1;
+  
+  if (latest_adc_reading_3B == adc_mirror_3B) {
+    // Either ADCBUF3/B has not been updated yet (or the value did not change over the previous 12 samples in which case we can use any value)
+    if (latest_adc_reading_19 == adc_mirror_19) {
+      // We have not updated ADCBUF1/9 yet (or again the value did not change in which case any value is valid)
+      global_data_A36926.vmon_at_eoc_period = latest_adc_reading_D5; // This sample is (32 TAD -> 50 TAD) Old
+      //global_data_A36926.vmon_at_eoc_period = latest_adc_reading_B3; // This sample is (68 TAD -> 86 TAD) Old
+    } else {
+      // We have updated ADCBUF1/9 
+      global_data_A36926.vmon_at_eoc_period = latest_adc_reading_19; // This sample is (14 TAD -> 50 TAD) OLD
+      //global_data_A36926.vmon_at_eoc_period = latest_adc_reading_D5; // This sample is (50 TAD -> 86 TAD) Old
+    }
+  } else {
+    // ADCBUF3/B has been updated
+    if (latest_adc_reading_5D == adc_mirror_5D) {
+      // We have not updated ADCBUF5/D yet (or the value did not change in which case any value is valid)
+      global_data_A36926.vmon_at_eoc_period = latest_adc_reading_3B; // This sample is (32 TAD -> 50 TAD) Old
+      //global_data_A36926.vmon_at_eoc_period = latest_adc_reading_19; // This sample is (68 TAD -> 86 TAD) Old 
+    } else {
+      // We have updated ADCBUF5/D
+      global_data_A36926.vmon_at_eoc_period = latest_adc_reading_5D; // This sample is (14 TAD -> 50 TAD) OLD
+      //global_data_A36926.vmon_at_eoc_period = latest_adc_reading_3B; // This sample is (50 TAD -> 86 TAD) Old
+    } 
+  }
+  
+  // DPARKER this doesn't work on 802
   if (PIN_LAMBDA_EOC != ILL_LAMBDA_AT_EOC) {
     __delay32(DELAY_TCY_5US);
     if (PIN_LAMBDA_EOC != ILL_LAMBDA_AT_EOC) {
