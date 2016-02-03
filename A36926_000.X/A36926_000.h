@@ -365,7 +365,7 @@ extern LambdaControlData global_data_A36926;
 
 
 
-#define LAMBDA_HOLDOFF_TIME_US         600        // 400 uS
+#define LAMBDA_HOLDOFF_TIME_US         100        // 700 uS
 #define LAMBDA_MAX_CHARGE_TIME_US      2400      // 2.4mS
 //#define RETRIGGER_BLANKING_US          1100       // 1100uSus
 

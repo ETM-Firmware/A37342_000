@@ -992,7 +992,7 @@ void __attribute__((interrupt, no_auto_psv)) _T1Interrupt(void) {
     If the lambda is not at EOC, it does not enable the trigger and sets the Lambda EOC Timeout Fault bit
     If the lambda is at EOC, It enables the trigger & sets status bits to show that the lambda is not charging and that the system is ready to fire.    
   */
-  
+
   _T1IF = 0;         // Clear the interrupt flag
   _T1IE = 0;         // Disable the interrupt (This will be enabled the next time that a capacitor charging sequence starts)
   T1CONbits.TON = 0;   // Stop the timer from incrementing (Again this will be restarted with the next time the capacitor charge sequence starts)
@@ -1051,6 +1051,11 @@ void __attribute__((interrupt, no_auto_psv)) _T1Interrupt(void) {
       //global_data_A36926.vmon_at_eoc_period = latest_adc_reading_3B; // This sample is (50 TAD -> 86 TAD) Old
     } 
   }
+
+  if (global_data_A36926.vmon_at_eoc_period >= 0x200) {
+    PIN_LAMBDA_INHIBIT = OLL_INHIBIT_LAMBDA;  // INHIBIT the lambda
+  }  
+
   
   // DPARKER this doesn't work on 802
   if (PIN_LAMBDA_EOC != ILL_LAMBDA_AT_EOC) {
