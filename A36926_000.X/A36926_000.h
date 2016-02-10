@@ -287,6 +287,8 @@ typedef struct {
   unsigned int store_lambda_voltage;
 
   unsigned int hv_lambda_power_wait;
+  unsigned int lambda_reached_eoc;
+
 } LambdaControlData;
 
 extern LambdaControlData global_data_A36926;
@@ -312,17 +314,13 @@ extern LambdaControlData global_data_A36926;
 #define _LOGGED_LAMBDA_OVER_TEMP                        _WARNING_3
 #define _LOGGED_LAMBDA_INTERLOCK                        _WARNING_4
 #define _LOGGED_LAMBDA_LOAD_FLT                         _WARNING_5
-
+#define _LOGGED_LAMBDA_SUM_FAULT                        _WARNING_6
 
 #define _FAULT_CAN_COMMUNICATION_LATCHED                _FAULT_0
-#define _FAULT_LAMBDA_SUM_FAULT                         _FAULT_1
-#define _FAULT_LAMBDA_NOT_POWERED                       _FAULT_2
-#define _FAULT_POWER_UP_TIMEOUT                         _FAULT_3
-#define _FAULT_FALSE_TRIGGER                            _FAULT_4
+#define _FAULT_POWER_UP_TIMEOUT                         _FAULT_1
 
-#define _NOT_LOGGED_LAMBDA_SUM_FAULT                    _NOT_LOGGED_0
-#define _STATUS_LAMBDA_AT_EOC                           _NOT_LOGGED_1
-#define _STATUS_LAMBDA_HIGH_ENERGY                      _NOT_LOGGED_2
+#define _STATUS_LAMBDA_AT_EOC                           _NOT_LOGGED_0
+#define _STATUS_LAMBDA_HIGH_ENERGY                      _NOT_LOGGED_1
 
 
 
@@ -375,8 +373,9 @@ extern LambdaControlData global_data_A36926;
 #define HV_ON_LAMBDA_SET_POINT_REFRESH_RATE_WHEN_NOT_PULSING            200             // 2 seconds
 
 
-#define POWER_UP_DELAY   500                            // 5 Seconds
-#define TIME_WAIT_FOR_LAMBDA_TO_SET_FAULT_OUTPUTS   300  // 1 Seconds
+#define AC_POWER_UP_DELAY  100                           // 1 Seconds - This is the time it take AC power to be applied to the Lambda after HV ON is enabled
+#define POWER_UP_DELAY     200                           // 2 Seconds - This is the time Lambda has to reach output voltage after being enabled before fault
+#define TIME_WAIT_FOR_LAMBDA_TO_SET_FAULT_OUTPUTS   300  // 3 Seconds
 
 
 

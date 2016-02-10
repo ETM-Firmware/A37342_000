@@ -12,7 +12,6 @@ unsigned int setup_done;
 
 volatile unsigned int adc_mirror[16];
 volatile unsigned int adc_mirror_latest_update;
-volatile unsigned int store_next_vmon_reading;
 
 
 unsigned int post_pulse_process_count;
@@ -108,9 +107,7 @@ void DoStateMachine(void) {
     while (global_data_A36926.control_state == STATE_WAITING_FOR_POWER) {
       DoA36926();
       
-
-#define HV_POWER_UP_DELAY  200
-      if (global_data_A36926.hv_lambda_power_wait >= HV_POWER_UP_DELAY) {
+      if (global_data_A36926.hv_lambda_power_wait >= AC_POWER_UP_DELAY) {
 	global_data_A36926.control_state = STATE_POWER_UP;
       }
 
@@ -121,8 +118,8 @@ void DoStateMachine(void) {
     break;
 
 
-
   case STATE_POWER_UP:
+    global_data_A36926.lambda_reached_eoc = 0;
     EnableHVLambda();
     _CONTROL_NOT_READY = 1;
     global_data_A36926.power_up_delay_counter = 0;
@@ -130,13 +127,17 @@ void DoStateMachine(void) {
     while (global_data_A36926.control_state == STATE_POWER_UP) {
       DoA36926();
       
-      if ((global_data_A36926.power_up_delay_counter >= POWER_UP_DELAY)) {
+      if (global_data_A36926.lambda_reached_eoc) {
 	global_data_A36926.control_state = STATE_OPERATE;
-      }      
+      }
 
       if (ETMCanSlaveGetSyncMsgSystemHVDisable()) {
 	global_data_A36926.control_state = STATE_WAITING_FOR_POWER;
       }
+
+      if ((global_data_A36926.power_up_delay_counter >= POWER_UP_DELAY)) {
+	_FAULT_POWER_UP_TIMEOUT = 1;
+      }      
 
       if (_FAULT_REGISTER != 0) {
 	global_data_A36926.control_state = STATE_FAULT_WAIT;
@@ -202,7 +203,7 @@ void DoPostPulseProcess(void) {
   if (ETMCanSlaveGetSyncMsgHighSpeedLogging()) {
     ETMCanSlaveLogPulseData(ETM_CAN_DATA_LOG_REGISTER_HV_LAMBDA_FAST_LOG_0,
 			    global_data_A36926.pulse_id,
-			    ETMScaleFactor16(global_data_A36926.vmon_at_eoc_period << 4, MACRO_DEC_TO_SCALE_FACTOR_16(VMON_SCALE_FACTOR), OFFSET_ZERO), // This is the most recent lambda voltage ADC reading at the end of the chrage period
+			    global_data_A36926.vmon_at_eoc_period,
 			    ETMScaleFactor16(global_data_A36926.vmon_pre_pulse << 4, MACRO_DEC_TO_SCALE_FACTOR_16(VMON_SCALE_FACTOR), OFFSET_ZERO), // This is the most recent lambda voltage ADC reading when a pulse is triggered
 			    ETMScaleFactor16(global_data_A36926.vprog_pre_pulse << 4, MACRO_DEC_TO_SCALE_FACTOR_16(VMON_SCALE_FACTOR), OFFSET_ZERO)); // This is the most recent lambda vprog ADC reading at pulse
   }
@@ -349,9 +350,9 @@ void UpdateFaultsAndStatusBits(void) {
 
   ETMDigitalUpdateInput(&global_data_A36926.digital_sum_flt, PIN_LAMBDA_SUM_FLT);
   if (ETMDigitalFilteredOutput(&global_data_A36926.digital_sum_flt) == ILL_LAMBDA_FAULT_ACTIVE) {
-    _NOT_LOGGED_LAMBDA_SUM_FAULT = 1;
+    _LOGGED_LAMBDA_SUM_FAULT = 1;
   } else {
-    _NOT_LOGGED_LAMBDA_SUM_FAULT = 0;
+    _LOGGED_LAMBDA_SUM_FAULT = 0;
   }
     
     
@@ -394,18 +395,7 @@ void UpdateFaultsAndStatusBits(void) {
     _LOGGED_LAMBDA_LOAD_FLT = 0;
   }
 
-  
-  // Update fault bits if the lambda should be running
-  if ((global_data_A36926.control_state == STATE_OPERATE) || (global_data_A36926.control_state == STATE_FAULT_WAIT)) {
-    if (_NOT_LOGGED_LAMBDA_SUM_FAULT) {
-      //DPARKER FIX _FAULT_LAMBDA_SUM_FAULT = 1;
-    }
 
-    if (_LOGGED_LAMBDA_NOT_POWERED) {
-      _FAULT_LAMBDA_NOT_POWERED = 1;
-    }
-  }
-    
   // Look for too Many False Triggers
 #define FALSE_TRIGGER_DECREMENT_TIME   100  // 1 Second
 #define FALSE_TRIGGER_TRIP_POINT       50
@@ -762,15 +752,6 @@ void __attribute__((interrupt, no_auto_psv)) _ADCInterrupt(void) {
 
   _ADIF = 0;
 
-  if (store_next_vmon_reading) {
-    store_next_vmon_reading = 0;
-    if (_BUFS) {
-      global_data_A36926.vmon_at_eoc_period = ADCBUF5;
-    } else {
-      global_data_A36926.vmon_at_eoc_period = ADCBUFD;
-    }
-  }
-  
   if (global_data_A36926.adc_ignore_current_sample) {
     // There was a pulse durring the sample sequence.  Throw the data away!!!
     global_data_A36926.adc_ignore_current_sample = 0;
@@ -996,6 +977,8 @@ void __attribute__((interrupt, no_auto_psv)) _T1Interrupt(void) {
   unsigned int latest_adc_reading_3B;
   unsigned int latest_adc_reading_5D;
 
+  unsigned int vmon;
+  unsigned int minimum_vmon_at_eoc;
 
   /*
     This interrupt indicates that the cap charger should have finished charging and it is time to enable the trigger pulse.
@@ -1008,9 +991,6 @@ void __attribute__((interrupt, no_auto_psv)) _T1Interrupt(void) {
   _T1IF = 0;         // Clear the interrupt flag
   _T1IE = 0;         // Disable the interrupt (This will be enabled the next time that a capacitor charging sequence starts)
   T1CONbits.TON = 0;   // Stop the timer from incrementing (Again this will be restarted with the next time the capacitor charge sequence starts)
-
-  // request the next vmon_adc_reading be stored.
-  //store_next_vmon_reading = 1;
 
   PIN_LAMBDA_INHIBIT = OLL_INHIBIT_LAMBDA;  // INHIBIT the lambda
 
@@ -1046,44 +1026,36 @@ void __attribute__((interrupt, no_auto_psv)) _T1Interrupt(void) {
     // Either ADCBUF3/B has not been updated yet (or the value did not change over the previous 12 samples in which case we can use any value)
     if (latest_adc_reading_19 == adc_mirror_19) {
       // We have not updated ADCBUF1/9 yet (or again the value did not change in which case any value is valid)
-      global_data_A36926.vmon_at_eoc_period = latest_adc_reading_D5; // This sample is (32 TAD -> 50 TAD) Old
-      //global_data_A36926.vmon_at_eoc_period = latest_adc_reading_B3; // This sample is (68 TAD -> 86 TAD) Old
+      vmon = latest_adc_reading_D5; // This sample is (32 TAD -> 50 TAD) Old
     } else {
       // We have updated ADCBUF1/9 
-      global_data_A36926.vmon_at_eoc_period = latest_adc_reading_19; // This sample is (14 TAD -> 50 TAD) OLD
-      //global_data_A36926.vmon_at_eoc_period = latest_adc_reading_D5; // This sample is (50 TAD -> 86 TAD) Old
+      vmon = latest_adc_reading_19; // This sample is (14 TAD -> 50 TAD) OLD
     }
   } else {
     // ADCBUF3/B has been updated
     if (latest_adc_reading_5D == adc_mirror_5D) {
       // We have not updated ADCBUF5/D yet (or the value did not change in which case any value is valid)
-      global_data_A36926.vmon_at_eoc_period = latest_adc_reading_3B; // This sample is (32 TAD -> 50 TAD) Old
-      //global_data_A36926.vmon_at_eoc_period = latest_adc_reading_19; // This sample is (68 TAD -> 86 TAD) Old 
+      vmon = latest_adc_reading_3B; // This sample is (32 TAD -> 50 TAD) Old
     } else {
       // We have updated ADCBUF5/D
-      global_data_A36926.vmon_at_eoc_period = latest_adc_reading_5D; // This sample is (14 TAD -> 50 TAD) OLD
-      //global_data_A36926.vmon_at_eoc_period = latest_adc_reading_3B; // This sample is (50 TAD -> 86 TAD) Old
+      vmon = latest_adc_reading_5D; // This sample is (14 TAD -> 50 TAD) OLD
     } 
   }
 
+  if (PIN_LAMBDA_VOLTAGE_SELECT == OLL_LAMBDA_VOLTAGE_SELECT_LOW_ENERGY) {
+    minimum_vmon_at_eoc = ETMScaleFactor2(global_data_A36926.analog_output_low_energy_vprog.set_point, MACRO_DEC_TO_CAL_FACTOR_2(.95), 0);
+  } else {
+    minimum_vmon_at_eoc = ETMScaleFactor2(global_data_A36926.analog_output_high_energy_vprog.set_point, MACRO_DEC_TO_CAL_FACTOR_2(.95), 0);
+  }
 
+  global_data_A36926.vmon_at_eoc_period = ETMScaleFactor16(vmon << 4, MACRO_DEC_TO_SCALE_FACTOR_16(VMON_SCALE_FACTOR), OFFSET_ZERO);
 
-  
-  // DPARKER this doesn't work on 802
-  if (PIN_LAMBDA_EOC != ILL_LAMBDA_AT_EOC) {
-    __delay32(DELAY_TCY_5US);
-    if (PIN_LAMBDA_EOC != ILL_LAMBDA_AT_EOC) {
-      __delay32(DELAY_TCY_5US);
-      if (PIN_LAMBDA_EOC != ILL_LAMBDA_AT_EOC) {
-	__delay32(DELAY_TCY_5US);
-	if (PIN_LAMBDA_EOC != ILL_LAMBDA_AT_EOC) {
-	  __delay32(DELAY_TCY_5US);
-	  if (PIN_LAMBDA_EOC != ILL_LAMBDA_AT_EOC) {
-	    global_data_A36926.eoc_not_reached_count++;
-	  }
-	} 
-      }
-    }
+  // Check that we reached EOC
+  if (global_data_A36926.vmon_at_eoc_period > minimum_vmon_at_eoc) {
+    global_data_A36926.lambda_reached_eoc = 1;
+  } else {
+    global_data_A36926.eoc_not_reached_count++;
+    global_data_A36926.lambda_reached_eoc = 0;
   }
 }  
 
