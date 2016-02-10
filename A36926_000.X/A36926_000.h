@@ -259,7 +259,6 @@ typedef struct {
   unsigned int charge_period_error_counter;
   unsigned int power_up_timer;
   //unsigned int fault_active;
-  unsigned int power_up_delay_counter;
   unsigned int fault_wait_time;
   unsigned int pulse_id;
   unsigned int previous_pulse_id;
@@ -317,7 +316,6 @@ extern LambdaControlData global_data_A36926;
 #define _LOGGED_LAMBDA_SUM_FAULT                        _WARNING_6
 
 #define _FAULT_CAN_COMMUNICATION_LATCHED                _FAULT_0
-#define _FAULT_POWER_UP_TIMEOUT                         _FAULT_1
 
 #define _STATUS_LAMBDA_AT_EOC                           _NOT_LOGGED_0
 #define _STATUS_LAMBDA_HIGH_ENERGY                      _NOT_LOGGED_1
@@ -374,7 +372,6 @@ extern LambdaControlData global_data_A36926;
 
 
 #define AC_POWER_UP_DELAY  100                           // 1 Seconds - This is the time it take AC power to be applied to the Lambda after HV ON is enabled
-#define POWER_UP_DELAY     200                           // 2 Seconds - This is the time Lambda has to reach output voltage after being enabled before fault
 #define TIME_WAIT_FOR_LAMBDA_TO_SET_FAULT_OUTPUTS   300  // 3 Seconds
 
 

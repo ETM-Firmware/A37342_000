@@ -122,7 +122,6 @@ void DoStateMachine(void) {
     global_data_A36926.lambda_reached_eoc = 0;
     EnableHVLambda();
     _CONTROL_NOT_READY = 1;
-    global_data_A36926.power_up_delay_counter = 0;
     running_persistent = 0;
     while (global_data_A36926.control_state == STATE_POWER_UP) {
       DoA36926();
@@ -134,10 +133,6 @@ void DoStateMachine(void) {
       if (ETMCanSlaveGetSyncMsgSystemHVDisable()) {
 	global_data_A36926.control_state = STATE_WAITING_FOR_POWER;
       }
-
-      if ((global_data_A36926.power_up_delay_counter >= POWER_UP_DELAY)) {
-	_FAULT_POWER_UP_TIMEOUT = 1;
-      }      
 
       if (_FAULT_REGISTER != 0) {
 	global_data_A36926.control_state = STATE_FAULT_WAIT;
@@ -273,13 +268,6 @@ void DoA36926(void) {
 	global_data_A36926.hv_lambda_power_wait++;
       } else {
 	global_data_A36926.hv_lambda_power_wait = 0;
-      }
-    }
-
-    if (global_data_A36926.control_state == STATE_POWER_UP) {
-      global_data_A36926.power_up_delay_counter++;
-      if (global_data_A36926.power_up_delay_counter >= POWER_UP_DELAY) {
-	global_data_A36926.power_up_delay_counter = POWER_UP_DELAY;
       }
     }
 
