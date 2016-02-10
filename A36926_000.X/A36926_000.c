@@ -104,10 +104,13 @@ void DoStateMachine(void) {
     _CONTROL_NOT_READY = 1;
     _FAULT_REGISTER = 0;
     running_persistent = 0;
+    global_data_A36926.hv_lambda_power_wait = 0;
     while (global_data_A36926.control_state == STATE_WAITING_FOR_POWER) {
       DoA36926();
       
-      if (!ETMCanSlaveGetSyncMsgSystemHVDisable()) {
+
+#define HV_POWER_UP_DELAY  200
+      if (global_data_A36926.hv_lambda_power_wait >= HV_POWER_UP_DELAY) {
 	global_data_A36926.control_state = STATE_POWER_UP;
       }
 
@@ -263,7 +266,15 @@ void DoA36926(void) {
     slave_board_data.log_data[6] = global_data_A36926.analog_input_lambda_vmon.reading_scaled_and_calibrated;
     slave_board_data.log_data[7] = global_data_A36926.eoc_not_reached_count;
   
-    
+    if (global_data_A36926.control_state == STATE_WAITING_FOR_POWER) {
+      // We need to wait for power to be applied to the lambda before trying to enable high voltage
+      if (!ETMCanSlaveGetSyncMsgSystemHVDisable()) {
+	global_data_A36926.hv_lambda_power_wait++;
+      } else {
+	global_data_A36926.hv_lambda_power_wait = 0;
+      }
+    }
+
     if (global_data_A36926.control_state == STATE_POWER_UP) {
       global_data_A36926.power_up_delay_counter++;
       if (global_data_A36926.power_up_delay_counter >= POWER_UP_DELAY) {
@@ -696,15 +707,16 @@ void EnableHVLambda(void) {
   // The next time the DAC is updated it will be updated with the most recent high/low energy values
   global_data_A36926.analog_output_high_energy_vprog.enabled = 1;
   global_data_A36926.analog_output_low_energy_vprog.enabled = 1;
+
+  // Set digital output to enable HV_ON of the lambda
+  PIN_LAMBDA_ENABLE = OLL_ENABLE_LAMBDA;
   
   // Set digital output to inhibit the lambda
   PIN_LAMBDA_INHIBIT = !OLL_INHIBIT_LAMBDA;
   
-  // Set digital output to enable HV_ON of the lambda
-  PIN_LAMBDA_ENABLE = OLL_ENABLE_LAMBDA;
-
   T1CONbits.TON = 0;
-  PR1 = (TMR1_LAMBDA_CHARGE_PERIOD - TMR1_DELAY_HOLDOFF);
+  //PR1 = (TMR1_LAMBDA_CHARGE_PERIOD - TMR1_DELAY_HOLDOFF);
+  PR1 = TMR1_LAMBDA_STARTUP_CHARGE_PERIOD;
   TMR1 = 0;
   _T1IF = 0;
   _T1IE = 1;
@@ -1000,6 +1012,8 @@ void __attribute__((interrupt, no_auto_psv)) _T1Interrupt(void) {
   // request the next vmon_adc_reading be stored.
   //store_next_vmon_reading = 1;
 
+  PIN_LAMBDA_INHIBIT = OLL_INHIBIT_LAMBDA;  // INHIBIT the lambda
+
   // Save the most recent vmon adc reading
   _ADIE = 0;
   // NEED to prevent updates to adc_mirror or it could overwrite calculation
@@ -1052,9 +1066,7 @@ void __attribute__((interrupt, no_auto_psv)) _T1Interrupt(void) {
     } 
   }
 
-  if (global_data_A36926.vmon_at_eoc_period >= 0x200) {
-    PIN_LAMBDA_INHIBIT = OLL_INHIBIT_LAMBDA;  // INHIBIT the lambda
-  }  
+
 
   
   // DPARKER this doesn't work on 802

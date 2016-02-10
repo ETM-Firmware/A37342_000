@@ -215,7 +215,7 @@
 #define TMR1_DELAY_HOLDOFF             (FCY_CLK_MHZ*TMR1_DELAY_HOLDOFF_US/8)    
 #define TMR1_LAMBDA_CHARGE_PERIOD      (FCY_CLK_MHZ*TMR1_LAMBDA_CHARGE_TIME_US/8)
 //#define TMR1_RETRIGGER_BLANK           (FCY_CLK_MHZ*RETRIGGER_BLANKING_US/8)
-
+#define TMR1_LAMBDA_STARTUP_CHARGE_PERIOD (FCY_CLK_MHZ*LAMBDA_STARTUP_CHARGE_TIME_US/8)
 
 
 /* 
@@ -285,6 +285,8 @@ typedef struct {
   unsigned int vmon_pre_pulse;
   unsigned int vprog_pre_pulse;
   unsigned int store_lambda_voltage;
+
+  unsigned int hv_lambda_power_wait;
 } LambdaControlData;
 
 extern LambdaControlData global_data_A36926;
@@ -365,9 +367,9 @@ extern LambdaControlData global_data_A36926;
 
 
 
-#define LAMBDA_HOLDOFF_TIME_US         100        // 700 uS
-#define LAMBDA_MAX_CHARGE_TIME_US      2400      // 2.4mS
-//#define RETRIGGER_BLANKING_US          1100       // 1100uSus
+#define LAMBDA_HOLDOFF_TIME_US         150        // 150 uS
+#define LAMBDA_MAX_CHARGE_TIME_US      2100       // 2.1mS
+#define LAMBDA_STARTUP_CHARGE_TIME_US  50000      // 50ms
 
 
 #define HV_ON_LAMBDA_SET_POINT_REFRESH_RATE_WHEN_NOT_PULSING            200             // 2 seconds
