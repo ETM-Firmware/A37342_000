@@ -316,6 +316,7 @@ extern LambdaControlData global_data_A36926;
 #define _LOGGED_LAMBDA_SUM_FAULT                        _WARNING_6
 
 #define _FAULT_CAN_COMMUNICATION_LATCHED                _FAULT_0
+//#define _FAULT_HIGH_VOLTAGE_DID_NOT_STARTUP             _FAULT_1
 
 #define _STATUS_LAMBDA_AT_EOC                           _NOT_LOGGED_0
 #define _STATUS_LAMBDA_HIGH_ENERGY                      _NOT_LOGGED_1
@@ -373,7 +374,7 @@ extern LambdaControlData global_data_A36926;
 
 #define AC_POWER_UP_DELAY  100                           // 1 Seconds - This is the time it take AC power to be applied to the Lambda after HV ON is enabled
 #define TIME_WAIT_FOR_LAMBDA_TO_SET_FAULT_OUTPUTS   300  // 3 Seconds
-
+#define MAX_TIME_TO_WAIT_FOR_EOC          400         // 4 Seconds
 
 
 #define PWR_5V_OVER_FLT        5200                   // 5.2 V

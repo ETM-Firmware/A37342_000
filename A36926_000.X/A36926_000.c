@@ -39,6 +39,7 @@ void DoA36926(void);
 void UpdateFaultsAndStatusBits(void);
 void InitializeA36926(void);
 void DoPostPulseProcess(void);
+unsigned int CheckAtEOC(void);
 
 int main(void) {
   global_data_A36926.control_state = STATE_STARTUP;
@@ -107,6 +108,12 @@ void DoStateMachine(void) {
     while (global_data_A36926.control_state == STATE_WAITING_FOR_POWER) {
       DoA36926();
       
+      if (!ETMCanSlaveGetSyncMsgSystemHVDisable()) {
+	global_data_A36926.hv_lambda_power_wait++;
+      } else {
+	global_data_A36926.hv_lambda_power_wait = 0;
+      }
+
       if (global_data_A36926.hv_lambda_power_wait >= AC_POWER_UP_DELAY) {
 	global_data_A36926.control_state = STATE_POWER_UP;
       }
@@ -126,14 +133,14 @@ void DoStateMachine(void) {
     while (global_data_A36926.control_state == STATE_POWER_UP) {
       DoA36926();
       
-      if (global_data_A36926.lambda_reached_eoc) {
+      if (CheckAtEOC()) {
 	global_data_A36926.control_state = STATE_OPERATE;
       }
-
+      
       if (ETMCanSlaveGetSyncMsgSystemHVDisable()) {
 	global_data_A36926.control_state = STATE_WAITING_FOR_POWER;
       }
-
+      
       if (_FAULT_REGISTER != 0) {
 	global_data_A36926.control_state = STATE_FAULT_WAIT;
       }
@@ -249,7 +256,10 @@ void DoA36926(void) {
     ETMCanSlaveSetDebugRegister(0x7, slave_board_data.local_data[3]);
     ETMCanSlaveSetDebugRegister(0x8, ETMCanSlaveGetPulseCount());
     ETMCanSlaveSetDebugRegister(0x9, post_pulse_process_count);
-    ETMCanSlaveSetDebugRegister(0xF, global_data_A36926.control_state);
+    ETMCanSlaveSetDebugRegister(0xA, global_data_A36926.control_state);
+
+    // ETMCanSlaveSetDebugRegister(0xE, RESERVED);
+    // ETMCanSlaveSetDebugRegister(0xF, RESERVED);
 
 
     // Update all the logging data
@@ -262,15 +272,6 @@ void DoA36926(void) {
     slave_board_data.log_data[6] = global_data_A36926.analog_input_lambda_vmon.reading_scaled_and_calibrated;
     slave_board_data.log_data[7] = global_data_A36926.eoc_not_reached_count;
   
-    if (global_data_A36926.control_state == STATE_WAITING_FOR_POWER) {
-      // We need to wait for power to be applied to the lambda before trying to enable high voltage
-      if (!ETMCanSlaveGetSyncMsgSystemHVDisable()) {
-	global_data_A36926.hv_lambda_power_wait++;
-      } else {
-	global_data_A36926.hv_lambda_power_wait = 0;
-      }
-    }
-
     if (global_data_A36926.control_state == STATE_FAULT_WAIT) {
       global_data_A36926.fault_wait_time++;
       if (global_data_A36926.fault_wait_time >= TIME_WAIT_FOR_LAMBDA_TO_SET_FAULT_OUTPUTS) {
@@ -313,6 +314,27 @@ void DoA36926(void) {
   }
 }
 
+
+unsigned int CheckAtEOC(void) {
+  unsigned int minimum_vmon_at_eoc;
+  unsigned int vmon;
+
+  if (PIN_LAMBDA_VOLTAGE_SELECT == OLL_LAMBDA_VOLTAGE_SELECT_LOW_ENERGY) {
+    minimum_vmon_at_eoc = ETMScaleFactor2(global_data_A36926.analog_output_low_energy_vprog.set_point, MACRO_DEC_TO_CAL_FACTOR_2(.90), 0);
+  } else {
+    minimum_vmon_at_eoc = ETMScaleFactor2(global_data_A36926.analog_output_high_energy_vprog.set_point, MACRO_DEC_TO_CAL_FACTOR_2(.90), 0);
+  }
+  
+  vmon = ETMScaleFactor16(ADCBUF1 << 4, MACRO_DEC_TO_SCALE_FACTOR_16(VMON_SCALE_FACTOR), OFFSET_ZERO);
+
+  ETMCanSlaveSetDebugRegister(0xE, vmon);
+  ETMCanSlaveSetDebugRegister(0xF, minimum_vmon_at_eoc);
+
+  if (vmon > minimum_vmon_at_eoc) {
+    return 1;
+  }
+  return 0;
+}
 
 
 void UpdateFaultsAndStatusBits(void) {
@@ -980,7 +1002,9 @@ void __attribute__((interrupt, no_auto_psv)) _T1Interrupt(void) {
   _T1IE = 0;         // Disable the interrupt (This will be enabled the next time that a capacitor charging sequence starts)
   T1CONbits.TON = 0;   // Stop the timer from incrementing (Again this will be restarted with the next time the capacitor charge sequence starts)
 
-  PIN_LAMBDA_INHIBIT = OLL_INHIBIT_LAMBDA;  // INHIBIT the lambda
+  if (global_data_A36926.control_state != STATE_POWER_UP) {
+    PIN_LAMBDA_INHIBIT = OLL_INHIBIT_LAMBDA;  // INHIBIT the lambda
+  }
 
   // Save the most recent vmon adc reading
   _ADIE = 0;
