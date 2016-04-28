@@ -33,6 +33,8 @@
 
   ADC Module - See Below For Specifics
 
+  Timer2 - Used to measure the PRF
+
 */
 
 
@@ -102,7 +104,7 @@
 #define A36926_TRISB_VALUE 0b1011111111111111
 #define A36926_TRISC_VALUE 0b1111111111111111
 #define A36926_TRISD_VALUE 0b1111111111110000
-#define A36926_TRISF_VALUE 0b1111111100110011
+#define A36926_TRISF_VALUE 0b1111111101110011
 #define A36926_TRISG_VALUE 0b1100111111111111
 
 
@@ -217,10 +219,12 @@
 //#define TMR1_RETRIGGER_BLANK           (FCY_CLK_MHZ*RETRIGGER_BLANKING_US/8)
 #define TMR1_LAMBDA_STARTUP_CHARGE_PERIOD (FCY_CLK_MHZ*LAMBDA_STARTUP_CHARGE_TIME_US/8)
 
+#define T2CON_VALUE                    (T2_ON & T2_IDLE_CON & T2_GATE_OFF & T2_PS_1_8 & T2_SOURCE_INT & T2_32BIT_MODE_OFF)
+
 
 /* 
-   TMR5 Configuration
-   Timer5 - Used for 10msTicToc
+   TMR3 Configuration
+   Timer3 - Used for 10msTicToc
    Period should be set to 10mS
    With 10Mhz Clock, x8 multiplier will yield max period of 17.7mS, 2.71uS per tick
 */
@@ -287,6 +291,8 @@ typedef struct {
 
   unsigned int hv_lambda_power_wait;
   unsigned int lambda_reached_eoc;
+
+  unsigned int first_pulse;
 
 } LambdaControlData;
 
@@ -365,7 +371,7 @@ extern LambdaControlData global_data_A36926;
 
 
 #define LAMBDA_HOLDOFF_TIME_US         150        // 150 uS
-#define LAMBDA_MAX_CHARGE_TIME_US      2100       // 2.1mS
+#define LAMBDA_MAX_CHARGE_TIME_US      2300       // 2.3mS
 #define LAMBDA_STARTUP_CHARGE_TIME_US  50000      // 50ms
 
 

@@ -225,6 +225,10 @@ void DoPostPulseProcess(void) {
 
 void DoA36926(void) {
   ETMCanSlaveDoCan();
+
+  if (_T2IF) {
+    global_data_A36926.first_pulse = 1;
+  }
   
   if (ETMCanSlaveIsNextPulseLevelHigh()) {
     PIN_LAMBDA_VOLTAGE_SELECT = !OLL_LAMBDA_VOLTAGE_SELECT_LOW_ENERGY;
@@ -437,8 +441,8 @@ void InitializeA36926(void) {
 
 
   // Configure Inhibit Interrupt
-  _INT3IP = 7; // This must be the highest priority interrupt
-  _INT3EP = 0; // Positive Transition
+  _INT1IP = 7; // This must be the highest priority interrupt
+  _INT1EP = 1; // Negative Transition
   
   
   // Initialize all I/O Registers
@@ -466,8 +470,7 @@ void InitializeA36926(void) {
 
 
   // Initialize TMR2
-  // TMR2 is unused but it must be configured for 16 bit mode
-  T2CON = 0;
+  T2CON = T2CON_VALUE;
 
   // Initialize TMR3
   PR3   = PR3_VALUE_10_MILLISECONDS;
@@ -480,7 +483,7 @@ void InitializeA36926(void) {
 
   // Initialize the Can module
   ETMCanSlaveInitialize(CAN_PORT_1, FCY_CLK, ETM_CAN_ADDR_HV_LAMBDA_BOARD, _PIN_RG13, 4, _PIN_RA7, _PIN_RG12);
-  ETMCanSlaveLoadConfiguration(36926, 0, FIRMWARE_AGILE_REV, FIRMWARE_BRANCH, FIRMWARE_BRANCH_REV);
+  ETMCanSlaveLoadConfiguration(37342, 0, FIRMWARE_AGILE_REV, FIRMWARE_BRANCH, FIRMWARE_BRANCH_REV);
 
 
   if (do_fast_startup) {
@@ -722,8 +725,8 @@ void EnableHVLambda(void) {
   _T1IE = 1;
   T1CONbits.TON = 1;
   
-  _INT3IF = 0;
-  _INT3IE = 1;  
+  _INT1IF = 0;
+  _INT1IE = 1;  
 }
 
 
@@ -735,7 +738,7 @@ void DisableHVLambda(void) {
   global_data_A36926.analog_output_high_energy_vprog.enabled = 0;
   global_data_A36926.analog_output_low_energy_vprog.enabled = 0;
   
-  _INT3IE = 0; 
+  _INT1IE = 0; 
 
   // Set digital output to inhibit the lambda
   PIN_LAMBDA_INHIBIT = OLL_INHIBIT_LAMBDA;
@@ -838,7 +841,9 @@ void __attribute__((interrupt, no_auto_psv)) _ADCInterrupt(void) {
 }
 
 
-void __attribute__((__interrupt__(__preprologue__("BCLR LATD, #0")), shadow, no_auto_psv)) _INT3Interrupt(void) {
+void __attribute__((__interrupt__(__preprologue__("BCLR LATD, #0")), shadow, no_auto_psv)) _INT1Interrupt(void) {
+  unsigned int charge_period;
+
   unsigned int adc_mirror_19;
   unsigned int adc_mirror_3B;
   unsigned int adc_mirror_5D;
@@ -857,6 +862,20 @@ void __attribute__((__interrupt__(__preprologue__("BCLR LATD, #0")), shadow, no_
   */ 
   
   PIN_LAMBDA_INHIBIT = OLL_INHIBIT_LAMBDA;
+
+  charge_period = TMR2;
+  TMR2 = 0;
+  _T2IF = 0;
+  if (global_data_A36926.first_pulse) {
+    global_data_A36926.first_pulse = 0;
+    charge_period = TMR1_LAMBDA_CHARGE_PERIOD;
+  }
+  if (charge_period <= TMR1_LAMBDA_CHARGE_PERIOD) {
+    charge_period = TMR1_LAMBDA_CHARGE_PERIOD;
+  }
+  charge_period -= 160;  // Subtract 128uS
+  
+
 
   if (adc_mirror_latest_update) {
     // The ADC is currently filling 0x8 - 0xF
@@ -961,7 +980,9 @@ void __attribute__((__interrupt__(__preprologue__("BCLR LATD, #0")), shadow, no_
   TMR1 = 0;
   _T1IF = 0;
   _T1IE = 1;
-  PR1 = (TMR1_LAMBDA_CHARGE_PERIOD - TMR1_DELAY_HOLDOFF);
+  
+  //PR1 = (TMR1_LAMBDA_CHARGE_PERIOD - TMR1_DELAY_HOLDOFF);
+  PR1 = (charge_period - TMR1_DELAY_HOLDOFF);
   T1CONbits.TON = 1;
   
   
@@ -972,7 +993,7 @@ void __attribute__((__interrupt__(__preprologue__("BCLR LATD, #0")), shadow, no_
   
   global_data_A36926.pulse_counter++;
   
-  _INT3IF = 0;
+  _INT1IF = 0;
 }
 
 
