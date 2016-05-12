@@ -479,6 +479,7 @@ void InitializeA36926(void) {
   T3CON = T3CON_VALUE;
 
   // Initialize the External EEprom
+  ETMEEPromUseExternal();
   ETMEEPromConfigureExternalDevice(EEPROM_SIZE_8K_BYTES, FCY_CLK, 400000, EEPROM_I2C_ADDRESS_0, 1);
 
   // Initialize the Can module
