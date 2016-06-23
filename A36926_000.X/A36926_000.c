@@ -725,6 +725,7 @@ void EnableHVLambda(void) {
   _T1IF = 0;
   _T1IE = 1;
   T1CONbits.TON = 1;
+  global_data_A36926.refresh_state = REFRESH_STATE_CHARGING;
   
   _INT1IF = 0;
   _INT1IE = 1;  
@@ -985,7 +986,7 @@ void __attribute__((__interrupt__(__preprologue__("BCLR LATD, #0")), shadow, no_
   //PR1 = (TMR1_LAMBDA_CHARGE_PERIOD - TMR1_DELAY_HOLDOFF);
   PR1 = (charge_period - TMR1_DELAY_HOLDOFF);
   T1CONbits.TON = 1;
-  
+  global_data_A36926.refresh_state = REFRESH_STATE_CHARGING;
   
   
   
@@ -1021,76 +1022,98 @@ void __attribute__((interrupt, no_auto_psv)) _T1Interrupt(void) {
   */
 
   _T1IF = 0;         // Clear the interrupt flag
-  _T1IE = 0;         // Disable the interrupt (This will be enabled the next time that a capacitor charging sequence starts)
-  T1CONbits.TON = 0;   // Stop the timer from incrementing (Again this will be restarted with the next time the capacitor charge sequence starts)
-
+  //_T1IE = 0;         // Disable the interrupt (This will be enabled the next time that a capacitor charging sequence starts)
+  //T1CONbits.TON = 0;   // Stop the timer from incrementing (Again this will be restarted with the next time the capacitor charge sequence starts)
+  
+  /*
   if (global_data_A36926.control_state != STATE_POWER_UP) {
     PIN_LAMBDA_INHIBIT = OLL_INHIBIT_LAMBDA;  // INHIBIT the lambda
   }
-
-  // Save the most recent vmon adc reading
-  _ADIE = 0;
-  // NEED to prevent updates to adc_mirror or it could overwrite calculation
-  if (adc_mirror_latest_update) {
-    // The ADC is currently filling 0x8 - 0xF
-    latest_adc_reading_B3 = adc_mirror[0x3];
-    latest_adc_reading_D5 = adc_mirror[0x5];
-    latest_adc_reading_19 = ADCBUF9;
-    latest_adc_reading_3B = ADCBUFB;
-    latest_adc_reading_5D = ADCBUFD;
-    
-    adc_mirror_19 = adc_mirror[0x9];
-    adc_mirror_3B = adc_mirror[0xB];
-    adc_mirror_5D = adc_mirror[0xD];
-  } else {
-    // The ADC is currently filling 0x0 - 0x7
-    latest_adc_reading_B3 = adc_mirror[0xB];
-    latest_adc_reading_D5 = adc_mirror[0xD];
-    latest_adc_reading_19 = ADCBUF1;
-    latest_adc_reading_3B = ADCBUF3;
-    latest_adc_reading_5D = ADCBUF5;
-
-    adc_mirror_19 = adc_mirror[0x1];
-    adc_mirror_3B = adc_mirror[0x3];
-    adc_mirror_5D = adc_mirror[0x5];
-  }
-  _ADIE = 1;
+  */
   
-  if (latest_adc_reading_3B == adc_mirror_3B) {
-    // Either ADCBUF3/B has not been updated yet (or the value did not change over the previous 12 samples in which case we can use any value)
-    if (latest_adc_reading_19 == adc_mirror_19) {
-      // We have not updated ADCBUF1/9 yet (or again the value did not change in which case any value is valid)
-      vmon = latest_adc_reading_D5; // This sample is (32 TAD -> 50 TAD) Old
+  _INT1IP = 1;
+  if (global_data_A36926.refresh_state == REFRESH_STATE_CHARGING) {
+    PIN_LAMBDA_INHIBIT = OLL_INHIBIT_LAMBDA;
+    TMR1 = 0;
+    PR1 = TMR1_LAMBDA_DELAY_1MS;
+    global_data_A36926.refresh_state = REFRESH_STATE_HOLDOFF;
+    // Save the most recent vmon adc reading
+    _ADIE = 0;
+    // NEED to prevent updates to adc_mirror or it could overwrite calculation
+    if (adc_mirror_latest_update) {
+      // The ADC is currently filling 0x8 - 0xF
+      latest_adc_reading_B3 = adc_mirror[0x3];
+      latest_adc_reading_D5 = adc_mirror[0x5];
+      latest_adc_reading_19 = ADCBUF9;
+      latest_adc_reading_3B = ADCBUFB;
+      latest_adc_reading_5D = ADCBUFD;
+      
+      adc_mirror_19 = adc_mirror[0x9];
+      adc_mirror_3B = adc_mirror[0xB];
+      adc_mirror_5D = adc_mirror[0xD];
     } else {
-      // We have updated ADCBUF1/9 
-      vmon = latest_adc_reading_19; // This sample is (14 TAD -> 50 TAD) OLD
+      // The ADC is currently filling 0x0 - 0x7
+      latest_adc_reading_B3 = adc_mirror[0xB];
+      latest_adc_reading_D5 = adc_mirror[0xD];
+      latest_adc_reading_19 = ADCBUF1;
+      latest_adc_reading_3B = ADCBUF3;
+      latest_adc_reading_5D = ADCBUF5;
+      
+      adc_mirror_19 = adc_mirror[0x1];
+      adc_mirror_3B = adc_mirror[0x3];
+      adc_mirror_5D = adc_mirror[0x5];
     }
-  } else {
-    // ADCBUF3/B has been updated
-    if (latest_adc_reading_5D == adc_mirror_5D) {
-      // We have not updated ADCBUF5/D yet (or the value did not change in which case any value is valid)
-      vmon = latest_adc_reading_3B; // This sample is (32 TAD -> 50 TAD) Old
+    _ADIE = 1;
+    
+    if (latest_adc_reading_3B == adc_mirror_3B) {
+      // Either ADCBUF3/B has not been updated yet (or the value did not change over the previous 12 samples in which case we can use any value)
+      if (latest_adc_reading_19 == adc_mirror_19) {
+	// We have not updated ADCBUF1/9 yet (or again the value did not change in which case any value is valid)
+	vmon = latest_adc_reading_D5; // This sample is (32 TAD -> 50 TAD) Old
+      } else {
+	// We have updated ADCBUF1/9 
+	vmon = latest_adc_reading_19; // This sample is (14 TAD -> 50 TAD) OLD
+      }
     } else {
-      // We have updated ADCBUF5/D
-      vmon = latest_adc_reading_5D; // This sample is (14 TAD -> 50 TAD) OLD
-    } 
+      // ADCBUF3/B has been updated
+      if (latest_adc_reading_5D == adc_mirror_5D) {
+	// We have not updated ADCBUF5/D yet (or the value did not change in which case any value is valid)
+	vmon = latest_adc_reading_3B; // This sample is (32 TAD -> 50 TAD) Old
+      } else {
+	// We have updated ADCBUF5/D
+	vmon = latest_adc_reading_5D; // This sample is (14 TAD -> 50 TAD) OLD
+      } 
+    }
+    
+    if (PIN_LAMBDA_VOLTAGE_SELECT == OLL_LAMBDA_VOLTAGE_SELECT_LOW_ENERGY) {
+      minimum_vmon_at_eoc = ETMScaleFactor2(global_data_A36926.analog_output_low_energy_vprog.set_point, MACRO_DEC_TO_CAL_FACTOR_2(.95), 0);
+    } else {
+      minimum_vmon_at_eoc = ETMScaleFactor2(global_data_A36926.analog_output_high_energy_vprog.set_point, MACRO_DEC_TO_CAL_FACTOR_2(.95), 0);
+    }
+    
+    global_data_A36926.vmon_at_eoc_period = ETMScaleFactor16(vmon << 4, MACRO_DEC_TO_SCALE_FACTOR_16(VMON_SCALE_FACTOR), OFFSET_ZERO);
+    
+    // Check that we reached EOC
+    if (global_data_A36926.vmon_at_eoc_period > minimum_vmon_at_eoc) {
+      global_data_A36926.lambda_reached_eoc = 1;
+    } else {
+      global_data_A36926.eoc_not_reached_count++;
+      global_data_A36926.lambda_reached_eoc = 0;
+    }
+    
+  } else if (global_data_A36926.refresh_state == REFRESH_STATE_HOLDOFF) {
+    PIN_LAMBDA_INHIBIT = !OLL_INHIBIT_LAMBDA;
+    TMR1 = 0;
+    PR1 = TMR1_LAMBDA_REFRESH_200US;
+    global_data_A36926.refresh_state = REFRESH_STATE_REFRESH;
+  } else if (global_data_A36926.refresh_state == REFRESH_STATE_REFRESH) {
+    PIN_LAMBDA_INHIBIT = OLL_INHIBIT_LAMBDA;
+    TMR1 = 0;
+    PR1 = TMR1_LAMBDA_DELAY_1MS;
+    global_data_A36926.refresh_state = REFRESH_STATE_HOLDOFF;
   }
 
-  if (PIN_LAMBDA_VOLTAGE_SELECT == OLL_LAMBDA_VOLTAGE_SELECT_LOW_ENERGY) {
-    minimum_vmon_at_eoc = ETMScaleFactor2(global_data_A36926.analog_output_low_energy_vprog.set_point, MACRO_DEC_TO_CAL_FACTOR_2(.95), 0);
-  } else {
-    minimum_vmon_at_eoc = ETMScaleFactor2(global_data_A36926.analog_output_high_energy_vprog.set_point, MACRO_DEC_TO_CAL_FACTOR_2(.95), 0);
-  }
-
-  global_data_A36926.vmon_at_eoc_period = ETMScaleFactor16(vmon << 4, MACRO_DEC_TO_SCALE_FACTOR_16(VMON_SCALE_FACTOR), OFFSET_ZERO);
-
-  // Check that we reached EOC
-  if (global_data_A36926.vmon_at_eoc_period > minimum_vmon_at_eoc) {
-    global_data_A36926.lambda_reached_eoc = 1;
-  } else {
-    global_data_A36926.eoc_not_reached_count++;
-    global_data_A36926.lambda_reached_eoc = 0;
-  }
+  _INT1IP = 7;
 }  
 
 

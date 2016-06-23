@@ -222,6 +222,9 @@
 #define T2CON_VALUE                    (T2_ON & T2_IDLE_CON & T2_GATE_OFF & T2_PS_1_8 & T2_SOURCE_INT & T2_32BIT_MODE_OFF)
 
 
+#define TMR1_LAMBDA_DELAY_1MS          (FCY_CLK_MHZ*1000/8)
+#define TMR1_LAMBDA_REFRESH_200US      (FCY_CLK_MHZ*200/8)
+
 /* 
    TMR3 Configuration
    Timer3 - Used for 10msTicToc
@@ -294,7 +297,14 @@ typedef struct {
 
   unsigned int first_pulse;
 
+  unsigned int refresh_state;
+
 } LambdaControlData;
+
+#define REFRESH_STATE_CHARGING    1
+#define REFRESH_STATE_REFRESH     2
+#define REFRESH_STATE_HOLDOFF     3
+
 
 extern LambdaControlData global_data_A36926;
 
