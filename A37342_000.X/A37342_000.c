@@ -1,4 +1,4 @@
-#include "A36926_000.h"
+#include "A37342_000.h"
 #include "FIRMWARE_VERSION.h"
 //#include "LTC265X.h"
 //#include "ETM_EEPROM.h"
@@ -28,21 +28,21 @@ _FICD(PGD);
 
 
 LTC265X U1_LTC2654;
-LambdaControlData global_data_A36926;
+LambdaControlData global_data_A37342;
 
 
 
 void DoStateMachine(void);
 void EnableHVLambda(void);
 void DisableHVLambda(void);
-void DoA36926(void);
+void DoA37342(void);
 void UpdateFaultsAndStatusBits(void);
-void InitializeA36926(void);
+void InitializeA37342(void);
 void DoPostPulseProcess(void);
 unsigned int CheckAtEOC(void);
 
 int main(void) {
-  global_data_A36926.control_state = STATE_STARTUP;
+  global_data_A37342.control_state = STATE_STARTUP;
   while (1) {
     DoStateMachine();
   }
@@ -51,7 +51,7 @@ int main(void) {
 
 
 void DoStateMachine(void) {
-  switch (global_data_A36926.control_state) {
+  switch (global_data_A37342.control_state) {
     
   case STATE_STARTUP:
     if (running_persistent == PERSISTENT_TEST) {
@@ -60,28 +60,28 @@ void DoStateMachine(void) {
       do_fast_startup = 0;
     }
     running_persistent = 0;
-    InitializeA36926();
+    InitializeA37342();
     _CONTROL_NOT_CONFIGURED = 1;
     _CONTROL_NOT_READY = 1;
-    global_data_A36926.control_state = STATE_WAITING_FOR_CONFIG;
+    global_data_A37342.control_state = STATE_WAITING_FOR_CONFIG;
     if (do_fast_startup) {
-      ETMDigitalInitializeInput(&global_data_A36926.digital_hv_not_powered , !ILL_LAMBDA_NOT_POWERED, 30);
+      ETMDigitalInitializeInput(&global_data_A37342.digital_hv_not_powered , !ILL_LAMBDA_NOT_POWERED, 30);
       _CONTROL_NOT_READY = 0;
       _FAULT_REGISTER = 0;
       EnableHVLambda();
       _CONTROL_NOT_CONFIGURED = 0;
       setup_done = 0;
       while (setup_done == 0) {
-	DoA36926();
+	DoA37342();
       }
       // Now you can update the DACs
-      ETMAnalogScaleCalibrateDACSetting(&global_data_A36926.analog_output_high_energy_vprog);
-      ETMAnalogScaleCalibrateDACSetting(&global_data_A36926.analog_output_low_energy_vprog);
+      ETMAnalogScaleCalibrateDACSetting(&global_data_A37342.analog_output_high_energy_vprog);
+      ETMAnalogScaleCalibrateDACSetting(&global_data_A37342.analog_output_low_energy_vprog);
       SetupLTC265X(&U1_LTC2654, ETM_SPI_PORT_2, FCY_CLK, LTC265X_SPI_2_5_M_BIT, _PIN_RG15, _PIN_RC1);
       WriteLTC265XTwoChannels(&U1_LTC2654,
-			      LTC265X_WRITE_AND_UPDATE_DAC_C, global_data_A36926.analog_output_high_energy_vprog.dac_setting_scaled_and_calibrated,
-			      LTC265X_WRITE_AND_UPDATE_DAC_D, global_data_A36926.analog_output_low_energy_vprog.dac_setting_scaled_and_calibrated);
-      global_data_A36926.control_state = STATE_OPERATE;
+			      LTC265X_WRITE_AND_UPDATE_DAC_C, global_data_A37342.analog_output_high_energy_vprog.dac_setting_scaled_and_calibrated,
+			      LTC265X_WRITE_AND_UPDATE_DAC_D, global_data_A37342.analog_output_low_energy_vprog.dac_setting_scaled_and_calibrated);
+      global_data_A37342.control_state = STATE_OPERATE;
     }
     break;
 
@@ -90,10 +90,10 @@ void DoStateMachine(void) {
     DisableHVLambda();
     _CONTROL_NOT_READY = 1;
     running_persistent = 0;
-    while (global_data_A36926.control_state == STATE_WAITING_FOR_CONFIG) {
-      DoA36926();
+    while (global_data_A37342.control_state == STATE_WAITING_FOR_CONFIG) {
+      DoA37342();
       if (_CONTROL_NOT_CONFIGURED == 0) {
-	global_data_A36926.control_state = STATE_WAITING_FOR_POWER;
+	global_data_A37342.control_state = STATE_WAITING_FOR_POWER;
       }
     }
     break;
@@ -104,45 +104,45 @@ void DoStateMachine(void) {
     _CONTROL_NOT_READY = 1;
     _FAULT_REGISTER = 0;
     running_persistent = 0;
-    global_data_A36926.hv_lambda_power_wait = 0;
-    while (global_data_A36926.control_state == STATE_WAITING_FOR_POWER) {
-      DoA36926();
+    global_data_A37342.hv_lambda_power_wait = 0;
+    while (global_data_A37342.control_state == STATE_WAITING_FOR_POWER) {
+      DoA37342();
       
       if (!ETMCanSlaveGetSyncMsgSystemHVDisable()) {
-	global_data_A36926.hv_lambda_power_wait++;
+	global_data_A37342.hv_lambda_power_wait++;
       } else {
-	global_data_A36926.hv_lambda_power_wait = 0;
+	global_data_A37342.hv_lambda_power_wait = 0;
       }
 
-      if (global_data_A36926.hv_lambda_power_wait >= AC_POWER_UP_DELAY) {
-	global_data_A36926.control_state = STATE_POWER_UP;
+      if (global_data_A37342.hv_lambda_power_wait >= AC_POWER_UP_DELAY) {
+	global_data_A37342.control_state = STATE_POWER_UP;
       }
 
       if (_FAULT_REGISTER != 0) {
-	global_data_A36926.control_state = STATE_FAULT_WAIT;
+	global_data_A37342.control_state = STATE_FAULT_WAIT;
       } 
     }
     break;
 
 
   case STATE_POWER_UP:
-    global_data_A36926.lambda_reached_eoc = 0;
+    global_data_A37342.lambda_reached_eoc = 0;
     EnableHVLambda();
     _CONTROL_NOT_READY = 1;
     running_persistent = 0;
-    while (global_data_A36926.control_state == STATE_POWER_UP) {
-      DoA36926();
+    while (global_data_A37342.control_state == STATE_POWER_UP) {
+      DoA37342();
       
       if (CheckAtEOC()) {
-	global_data_A36926.control_state = STATE_OPERATE;
+	global_data_A37342.control_state = STATE_OPERATE;
       }
       
       if (ETMCanSlaveGetSyncMsgSystemHVDisable()) {
-	global_data_A36926.control_state = STATE_WAITING_FOR_POWER;
+	global_data_A37342.control_state = STATE_WAITING_FOR_POWER;
       }
       
       if (_FAULT_REGISTER != 0) {
-	global_data_A36926.control_state = STATE_FAULT_WAIT;
+	global_data_A37342.control_state = STATE_FAULT_WAIT;
       }
     }
     break;
@@ -150,15 +150,15 @@ void DoStateMachine(void) {
   case STATE_OPERATE:
     _CONTROL_NOT_READY = 0;
     running_persistent = PERSISTENT_TEST;
-    while (global_data_A36926.control_state == STATE_OPERATE) {
-      DoA36926();
+    while (global_data_A37342.control_state == STATE_OPERATE) {
+      DoA37342();
       
       if (ETMCanSlaveGetSyncMsgSystemHVDisable()) {
-	global_data_A36926.control_state = STATE_WAITING_FOR_POWER;
+	global_data_A37342.control_state = STATE_WAITING_FOR_POWER;
       }
       
       if (_FAULT_REGISTER != 0) {
-	global_data_A36926.control_state = STATE_FAULT_WAIT;
+	global_data_A37342.control_state = STATE_FAULT_WAIT;
       }
     }
     break;
@@ -167,13 +167,13 @@ void DoStateMachine(void) {
   case STATE_FAULT_WAIT:
     DisableHVLambda();
     _CONTROL_NOT_READY = 1;
-    global_data_A36926.fault_wait_time = 0;
+    global_data_A37342.fault_wait_time = 0;
     running_persistent = 0;
-    while (global_data_A36926.control_state == STATE_FAULT_WAIT) {
-      DoA36926();
+    while (global_data_A37342.control_state == STATE_FAULT_WAIT) {
+      DoA37342();
 
-      if (global_data_A36926.fault_wait_time >= TIME_WAIT_FOR_LAMBDA_TO_SET_FAULT_OUTPUTS) {
-	global_data_A36926.control_state = STATE_FAULT;
+      if (global_data_A37342.fault_wait_time >= TIME_WAIT_FOR_LAMBDA_TO_SET_FAULT_OUTPUTS) {
+	global_data_A37342.control_state = STATE_FAULT;
       }
     }
     break;
@@ -183,18 +183,18 @@ void DoStateMachine(void) {
     DisableHVLambda();
     _CONTROL_NOT_READY = 1;
     running_persistent = 0;
-    while (global_data_A36926.control_state == STATE_FAULT) {
-      DoA36926();
+    while (global_data_A37342.control_state == STATE_FAULT) {
+      DoA37342();
 
       if (ETMCanSlaveGetSyncMsgResetEnable()) {
-	global_data_A36926.control_state = STATE_WAITING_FOR_CONFIG;
+	global_data_A37342.control_state = STATE_WAITING_FOR_CONFIG;
       }
     }
     break;
     
 
   default:
-    global_data_A36926.control_state = STATE_FAULT;
+    global_data_A37342.control_state = STATE_FAULT;
     break;
   }
 }
@@ -204,30 +204,30 @@ void DoPostPulseProcess(void) {
   // Send the pulse data up to the ECB for logging
   if (ETMCanSlaveGetSyncMsgHighSpeedLogging()) {
     ETMCanSlaveLogPulseData(ETM_CAN_DATA_LOG_REGISTER_HV_LAMBDA_FAST_LOG_0,
-			    global_data_A36926.pulse_id,
-			    global_data_A36926.vmon_at_eoc_period,
-			    ETMScaleFactor16(global_data_A36926.vmon_pre_pulse << 4, MACRO_DEC_TO_SCALE_FACTOR_16(VMON_SCALE_FACTOR), OFFSET_ZERO), // This is the most recent lambda voltage ADC reading when a pulse is triggered
-			    ETMScaleFactor16(global_data_A36926.vprog_pre_pulse << 4, MACRO_DEC_TO_SCALE_FACTOR_16(VMON_SCALE_FACTOR), OFFSET_ZERO)); // This is the most recent lambda vprog ADC reading at pulse
+			    global_data_A37342.pulse_id,
+			    global_data_A37342.vmon_at_eoc_period,
+			    ETMScaleFactor16(global_data_A37342.vmon_pre_pulse << 4, MACRO_DEC_TO_SCALE_FACTOR_16(VMON_SCALE_FACTOR), OFFSET_ZERO), // This is the most recent lambda voltage ADC reading when a pulse is triggered
+			    ETMScaleFactor16(global_data_A37342.vprog_pre_pulse << 4, MACRO_DEC_TO_SCALE_FACTOR_16(VMON_SCALE_FACTOR), OFFSET_ZERO)); // This is the most recent lambda vprog ADC reading at pulse
   }
   
   // Update the HV Lambda Program Values
-  ETMAnalogScaleCalibrateDACSetting(&global_data_A36926.analog_output_high_energy_vprog);
-  ETMAnalogScaleCalibrateDACSetting(&global_data_A36926.analog_output_low_energy_vprog);
+  ETMAnalogScaleCalibrateDACSetting(&global_data_A37342.analog_output_high_energy_vprog);
+  ETMAnalogScaleCalibrateDACSetting(&global_data_A37342.analog_output_low_energy_vprog);
   WriteLTC265XTwoChannels(&U1_LTC2654,
-			  LTC265X_WRITE_AND_UPDATE_DAC_C, global_data_A36926.analog_output_high_energy_vprog.dac_setting_scaled_and_calibrated,
-			  LTC265X_WRITE_AND_UPDATE_DAC_D, global_data_A36926.analog_output_low_energy_vprog.dac_setting_scaled_and_calibrated);
+			  LTC265X_WRITE_AND_UPDATE_DAC_C, global_data_A37342.analog_output_high_energy_vprog.dac_setting_scaled_and_calibrated,
+			  LTC265X_WRITE_AND_UPDATE_DAC_D, global_data_A37342.analog_output_low_energy_vprog.dac_setting_scaled_and_calibrated);
   
-  global_data_A36926.no_pulse_counter = 0;
+  global_data_A37342.no_pulse_counter = 0;
 }
 
 
 
 
-void DoA36926(void) {
+void DoA37342(void) {
   ETMCanSlaveDoCan();
 
   if (_T2IF) {
-    global_data_A36926.first_pulse = 1;
+    global_data_A37342.first_pulse = 1;
   }
   
   if (ETMCanSlaveIsNextPulseLevelHigh()) {
@@ -238,8 +238,8 @@ void DoA36926(void) {
     _STATUS_LAMBDA_HIGH_ENERGY = 0;
   }
 
-  if (global_data_A36926.run_post_pulse_process) {
-    global_data_A36926.run_post_pulse_process = 0;  
+  if (global_data_A37342.run_post_pulse_process) {
+    global_data_A37342.run_post_pulse_process = 0;  
     DoPostPulseProcess();
     post_pulse_process_count++;
   }
@@ -250,67 +250,67 @@ void DoA36926(void) {
     
 
     // Update debugging information
-    ETMCanSlaveSetDebugRegister(0, global_data_A36926.analog_input_lambda_vmon.reading_scaled_and_calibrated);
-    ETMCanSlaveSetDebugRegister(1, global_data_A36926.analog_input_lambda_vpeak.reading_scaled_and_calibrated);
-    ETMCanSlaveSetDebugRegister(2, global_data_A36926.analog_input_lambda_imon.reading_scaled_and_calibrated);
-    ETMCanSlaveSetDebugRegister(3, global_data_A36926.analog_input_lambda_heat_sink_temp.reading_scaled_and_calibrated);
+    ETMCanSlaveSetDebugRegister(0, global_data_A37342.analog_input_lambda_vmon.reading_scaled_and_calibrated);
+    ETMCanSlaveSetDebugRegister(1, global_data_A37342.analog_input_lambda_vpeak.reading_scaled_and_calibrated);
+    ETMCanSlaveSetDebugRegister(2, global_data_A37342.analog_input_lambda_imon.reading_scaled_and_calibrated);
+    ETMCanSlaveSetDebugRegister(3, global_data_A37342.analog_input_lambda_heat_sink_temp.reading_scaled_and_calibrated);
     ETMCanSlaveSetDebugRegister(0x4, slave_board_data.local_data[0]);
     ETMCanSlaveSetDebugRegister(0x5, slave_board_data.local_data[1]);
     ETMCanSlaveSetDebugRegister(0x6, slave_board_data.local_data[2]);
     ETMCanSlaveSetDebugRegister(0x7, slave_board_data.local_data[3]);
     ETMCanSlaveSetDebugRegister(0x8, ETMCanSlaveGetPulseCount());
     ETMCanSlaveSetDebugRegister(0x9, post_pulse_process_count);
-    ETMCanSlaveSetDebugRegister(0xA, global_data_A36926.control_state);
+    ETMCanSlaveSetDebugRegister(0xA, global_data_A37342.control_state);
 
     // ETMCanSlaveSetDebugRegister(0xE, RESERVED);
     // ETMCanSlaveSetDebugRegister(0xF, RESERVED);
 
 
     // Update all the logging data
-    slave_board_data.log_data[0] = global_data_A36926.analog_input_lambda_vpeak.reading_scaled_and_calibrated;
-    slave_board_data.log_data[1] = global_data_A36926.analog_output_low_energy_vprog.set_point;
-    slave_board_data.log_data[2] = global_data_A36926.analog_output_high_energy_vprog.set_point;
-    slave_board_data.log_data[3] = global_data_A36926.false_trigger_total_count;
-    slave_board_data.log_data[4] = global_data_A36926.analog_input_lambda_heat_sink_temp.reading_scaled_and_calibrated;
-    slave_board_data.log_data[5] = global_data_A36926.analog_input_lambda_imon.reading_scaled_and_calibrated;
-    slave_board_data.log_data[6] = global_data_A36926.analog_input_lambda_vmon.reading_scaled_and_calibrated;
-    slave_board_data.log_data[7] = global_data_A36926.eoc_not_reached_count;
+    slave_board_data.log_data[0] = global_data_A37342.analog_input_lambda_vpeak.reading_scaled_and_calibrated;
+    slave_board_data.log_data[1] = global_data_A37342.analog_output_low_energy_vprog.set_point;
+    slave_board_data.log_data[2] = global_data_A37342.analog_output_high_energy_vprog.set_point;
+    slave_board_data.log_data[3] = global_data_A37342.false_trigger_total_count;
+    slave_board_data.log_data[4] = global_data_A37342.analog_input_lambda_heat_sink_temp.reading_scaled_and_calibrated;
+    slave_board_data.log_data[5] = global_data_A37342.analog_input_lambda_imon.reading_scaled_and_calibrated;
+    slave_board_data.log_data[6] = global_data_A37342.analog_input_lambda_vmon.reading_scaled_and_calibrated;
+    slave_board_data.log_data[7] = global_data_A37342.eoc_not_reached_count;
   
-    if (global_data_A36926.control_state == STATE_FAULT_WAIT) {
-      global_data_A36926.fault_wait_time++;
-      if (global_data_A36926.fault_wait_time >= TIME_WAIT_FOR_LAMBDA_TO_SET_FAULT_OUTPUTS) {
-	global_data_A36926.fault_wait_time = TIME_WAIT_FOR_LAMBDA_TO_SET_FAULT_OUTPUTS;
+    if (global_data_A37342.control_state == STATE_FAULT_WAIT) {
+      global_data_A37342.fault_wait_time++;
+      if (global_data_A37342.fault_wait_time >= TIME_WAIT_FOR_LAMBDA_TO_SET_FAULT_OUTPUTS) {
+	global_data_A37342.fault_wait_time = TIME_WAIT_FOR_LAMBDA_TO_SET_FAULT_OUTPUTS;
       }
     }
 
     // Do Math on the ADC inputs
-    ETMAnalogScaleCalibrateADCReading(&global_data_A36926.analog_input_lambda_vmon);
-    ETMAnalogScaleCalibrateADCReading(&global_data_A36926.analog_input_lambda_vpeak);
-    ETMAnalogScaleCalibrateADCReading(&global_data_A36926.analog_input_lambda_imon);
-    ETMAnalogScaleCalibrateADCReading(&global_data_A36926.analog_input_lambda_heat_sink_temp);
+    ETMAnalogScaleCalibrateADCReading(&global_data_A37342.analog_input_lambda_vmon);
+    ETMAnalogScaleCalibrateADCReading(&global_data_A37342.analog_input_lambda_vpeak);
+    ETMAnalogScaleCalibrateADCReading(&global_data_A37342.analog_input_lambda_imon);
+    ETMAnalogScaleCalibrateADCReading(&global_data_A37342.analog_input_lambda_heat_sink_temp);
     
     
-    if (global_data_A36926.control_state != STATE_OPERATE) {
+    if (global_data_A37342.control_state != STATE_OPERATE) {
       // Update the HV Lambda Program Values
-      ETMAnalogScaleCalibrateDACSetting(&global_data_A36926.analog_output_high_energy_vprog);
-      ETMAnalogScaleCalibrateDACSetting(&global_data_A36926.analog_output_low_energy_vprog);
+      ETMAnalogScaleCalibrateDACSetting(&global_data_A37342.analog_output_high_energy_vprog);
+      ETMAnalogScaleCalibrateDACSetting(&global_data_A37342.analog_output_low_energy_vprog);
       WriteLTC265XTwoChannels(&U1_LTC2654,
-			      LTC265X_WRITE_AND_UPDATE_DAC_C, global_data_A36926.analog_output_high_energy_vprog.dac_setting_scaled_and_calibrated,
-			      LTC265X_WRITE_AND_UPDATE_DAC_D, global_data_A36926.analog_output_low_energy_vprog.dac_setting_scaled_and_calibrated);
+			      LTC265X_WRITE_AND_UPDATE_DAC_C, global_data_A37342.analog_output_high_energy_vprog.dac_setting_scaled_and_calibrated,
+			      LTC265X_WRITE_AND_UPDATE_DAC_D, global_data_A37342.analog_output_low_energy_vprog.dac_setting_scaled_and_calibrated);
       
       
     } else {
-      global_data_A36926.no_pulse_counter++;
-      if (global_data_A36926.no_pulse_counter >= HV_ON_LAMBDA_SET_POINT_REFRESH_RATE_WHEN_NOT_PULSING) {
+      global_data_A37342.no_pulse_counter++;
+      if (global_data_A37342.no_pulse_counter >= HV_ON_LAMBDA_SET_POINT_REFRESH_RATE_WHEN_NOT_PULSING) {
 	// A long time has passed without updating the Lambda Set points
 	// Update the HV Lambda Program Values
-	global_data_A36926.no_pulse_counter = 0;
+	global_data_A37342.no_pulse_counter = 0;
 	
-	ETMAnalogScaleCalibrateDACSetting(&global_data_A36926.analog_output_high_energy_vprog);
-	ETMAnalogScaleCalibrateDACSetting(&global_data_A36926.analog_output_low_energy_vprog);
+	ETMAnalogScaleCalibrateDACSetting(&global_data_A37342.analog_output_high_energy_vprog);
+	ETMAnalogScaleCalibrateDACSetting(&global_data_A37342.analog_output_low_energy_vprog);
 	WriteLTC265XTwoChannels(&U1_LTC2654,
-				LTC265X_WRITE_AND_UPDATE_DAC_C, global_data_A36926.analog_output_high_energy_vprog.dac_setting_scaled_and_calibrated,
-				LTC265X_WRITE_AND_UPDATE_DAC_D, global_data_A36926.analog_output_low_energy_vprog.dac_setting_scaled_and_calibrated);
+				LTC265X_WRITE_AND_UPDATE_DAC_C, global_data_A37342.analog_output_high_energy_vprog.dac_setting_scaled_and_calibrated,
+				LTC265X_WRITE_AND_UPDATE_DAC_D, global_data_A37342.analog_output_low_energy_vprog.dac_setting_scaled_and_calibrated);
       } 
     }
     
@@ -324,9 +324,9 @@ unsigned int CheckAtEOC(void) {
   unsigned int vmon;
 
   if (PIN_LAMBDA_VOLTAGE_SELECT == OLL_LAMBDA_VOLTAGE_SELECT_LOW_ENERGY) {
-    minimum_vmon_at_eoc = ETMScaleFactor2(global_data_A36926.analog_output_low_energy_vprog.set_point, MACRO_DEC_TO_CAL_FACTOR_2(.90), 0);
+    minimum_vmon_at_eoc = ETMScaleFactor2(global_data_A37342.analog_output_low_energy_vprog.set_point, MACRO_DEC_TO_CAL_FACTOR_2(.90), 0);
   } else {
-    minimum_vmon_at_eoc = ETMScaleFactor2(global_data_A36926.analog_output_high_energy_vprog.set_point, MACRO_DEC_TO_CAL_FACTOR_2(.90), 0);
+    minimum_vmon_at_eoc = ETMScaleFactor2(global_data_A37342.analog_output_high_energy_vprog.set_point, MACRO_DEC_TO_CAL_FACTOR_2(.90), 0);
   }
   
   vmon = ETMScaleFactor16(ADCBUF1 << 4, MACRO_DEC_TO_SCALE_FACTOR_16(VMON_SCALE_FACTOR), OFFSET_ZERO);
@@ -355,31 +355,31 @@ void UpdateFaultsAndStatusBits(void) {
   }
 
   // Update the logged and not logged status bits
-  ETMDigitalUpdateInput(&global_data_A36926.digital_hv_not_powered, PIN_LAMBDA_NOT_POWERED);
-  if (ETMDigitalFilteredOutput(&global_data_A36926.digital_hv_not_powered) == ILL_LAMBDA_NOT_POWERED) {
+  ETMDigitalUpdateInput(&global_data_A37342.digital_hv_not_powered, PIN_LAMBDA_NOT_POWERED);
+  if (ETMDigitalFilteredOutput(&global_data_A37342.digital_hv_not_powered) == ILL_LAMBDA_NOT_POWERED) {
     _LOGGED_LAMBDA_NOT_POWERED = 1;
   } else {
     _LOGGED_LAMBDA_NOT_POWERED = 0;
   }
 
-  ETMDigitalUpdateInput(&global_data_A36926.digital_sum_flt, PIN_LAMBDA_SUM_FLT);
-  if (ETMDigitalFilteredOutput(&global_data_A36926.digital_sum_flt) == ILL_LAMBDA_FAULT_ACTIVE) {
+  ETMDigitalUpdateInput(&global_data_A37342.digital_sum_flt, PIN_LAMBDA_SUM_FLT);
+  if (ETMDigitalFilteredOutput(&global_data_A37342.digital_sum_flt) == ILL_LAMBDA_FAULT_ACTIVE) {
     _LOGGED_LAMBDA_SUM_FAULT = 1;
   } else {
     _LOGGED_LAMBDA_SUM_FAULT = 0;
   }
     
     
-  ETMDigitalUpdateInput(&global_data_A36926.digital_hv_off,  PIN_LAMBDA_HV_ON_READBACK);
-  if (ETMDigitalFilteredOutput(&global_data_A36926.digital_hv_off) != ILL_LAMBDA_HV_ON) {
+  ETMDigitalUpdateInput(&global_data_A37342.digital_hv_off,  PIN_LAMBDA_HV_ON_READBACK);
+  if (ETMDigitalFilteredOutput(&global_data_A37342.digital_hv_off) != ILL_LAMBDA_HV_ON) {
     _LOGGED_LAMBDA_READBACK_HV_OFF = 1;
   } else {
     _LOGGED_LAMBDA_READBACK_HV_OFF = 0;
   }
 
 #ifdef __LCS1202
-  ETMDigitalUpdateInput(&global_data_A36926.digital_phase_loss,  PIN_LAMBDA_PHASE_LOSS_FLT);
-  if (ETMDigitalFilteredOutput(&global_data_A36926.digital_phase_loss) == ILL_LAMBDA_FAULT_ACTIVE) {
+  ETMDigitalUpdateInput(&global_data_A37342.digital_phase_loss,  PIN_LAMBDA_PHASE_LOSS_FLT);
+  if (ETMDigitalFilteredOutput(&global_data_A37342.digital_phase_loss) == ILL_LAMBDA_FAULT_ACTIVE) {
     _LOGGED_LAMBDA_PHASE_LOSS = 1;
   } else {
     _LOGGED_LAMBDA_PHASE_LOSS = 0;
@@ -388,22 +388,22 @@ void UpdateFaultsAndStatusBits(void) {
   _LOGGED_LAMBDA_PHASE_LOSS = 0;
 #endif      
 
-  ETMDigitalUpdateInput(&global_data_A36926.digital_over_temp,  PIN_LAMBDA_OVER_TEMP_FLT);
-  if (ETMDigitalFilteredOutput(&global_data_A36926.digital_over_temp) == ILL_LAMBDA_FAULT_ACTIVE) {
+  ETMDigitalUpdateInput(&global_data_A37342.digital_over_temp,  PIN_LAMBDA_OVER_TEMP_FLT);
+  if (ETMDigitalFilteredOutput(&global_data_A37342.digital_over_temp) == ILL_LAMBDA_FAULT_ACTIVE) {
     _LOGGED_LAMBDA_OVER_TEMP = 1;
   } else {
     _LOGGED_LAMBDA_OVER_TEMP = 0;
   }
     
-  ETMDigitalUpdateInput(&global_data_A36926.digital_interlock,  PIN_LAMBDA_INTERLOCK_FLT);
-  if (ETMDigitalFilteredOutput(&global_data_A36926.digital_interlock) == ILL_LAMBDA_FAULT_ACTIVE) {
+  ETMDigitalUpdateInput(&global_data_A37342.digital_interlock,  PIN_LAMBDA_INTERLOCK_FLT);
+  if (ETMDigitalFilteredOutput(&global_data_A37342.digital_interlock) == ILL_LAMBDA_FAULT_ACTIVE) {
     _LOGGED_LAMBDA_INTERLOCK = 1;
   } else {
     _LOGGED_LAMBDA_INTERLOCK = 0;
   }
   
-  ETMDigitalUpdateInput(&global_data_A36926.digital_load_flt,  PIN_LAMBDA_LOAD_FLT);
-  if (ETMDigitalFilteredOutput(&global_data_A36926.digital_load_flt) == ILL_LAMBDA_FAULT_ACTIVE) {
+  ETMDigitalUpdateInput(&global_data_A37342.digital_load_flt,  PIN_LAMBDA_LOAD_FLT);
+  if (ETMDigitalFilteredOutput(&global_data_A37342.digital_load_flt) == ILL_LAMBDA_FAULT_ACTIVE) {
     _LOGGED_LAMBDA_LOAD_FLT = 1;
   } else {
     _LOGGED_LAMBDA_LOAD_FLT = 0;
@@ -413,14 +413,14 @@ void UpdateFaultsAndStatusBits(void) {
   // Look for too Many False Triggers
 #define FALSE_TRIGGER_DECREMENT_TIME   100  // 1 Second
 #define FALSE_TRIGGER_TRIP_POINT       50
-  global_data_A36926.false_trigger_timer++;
-  if (global_data_A36926.false_trigger_timer >= FALSE_TRIGGER_DECREMENT_TIME) {
-    if (global_data_A36926.false_trigger_counter) {
-      global_data_A36926.false_trigger_counter--;
+  global_data_A37342.false_trigger_timer++;
+  if (global_data_A37342.false_trigger_timer >= FALSE_TRIGGER_DECREMENT_TIME) {
+    if (global_data_A37342.false_trigger_counter) {
+      global_data_A37342.false_trigger_counter--;
     }
   }
   
-  if (global_data_A36926.false_trigger_counter >= FALSE_TRIGGER_TRIP_POINT) {
+  if (global_data_A37342.false_trigger_counter >= FALSE_TRIGGER_TRIP_POINT) {
     //_FAULT_FALSE_TRIGGER = 1;
     // DPARKER - Fix the false trigger detection
   } 
@@ -429,7 +429,7 @@ void UpdateFaultsAndStatusBits(void) {
 
 
 
-void InitializeA36926(void) {
+void InitializeA37342(void) {
   unsigned int startup_counter;
 
   // Initialize the status register and load the inhibit and fault masks
@@ -446,12 +446,12 @@ void InitializeA36926(void) {
   
   
   // Initialize all I/O Registers
-  TRISA = A36926_TRISA_VALUE;
-  TRISB = A36926_TRISB_VALUE;
-  TRISC = A36926_TRISC_VALUE;
-  TRISD = A36926_TRISD_VALUE;
-  TRISF = A36926_TRISF_VALUE;
-  TRISG = A36926_TRISG_VALUE;
+  TRISA = A37342_TRISA_VALUE;
+  TRISB = A37342_TRISB_VALUE;
+  TRISC = A37342_TRISC_VALUE;
+  TRISD = A37342_TRISD_VALUE;
+  TRISF = A37342_TRISF_VALUE;
+  TRISG = A37342_TRISG_VALUE;
 
 
   // Configure ADC Interrupt
@@ -496,17 +496,17 @@ void InitializeA36926(void) {
   }
 
   // Initialize Digital Input Filters
-  ETMDigitalInitializeInput(&global_data_A36926.digital_hv_not_powered , ILL_LAMBDA_NOT_POWERED, 30);
-  ETMDigitalInitializeInput(&global_data_A36926.digital_sum_flt        , !ILL_LAMBDA_FAULT_ACTIVE, 30);
-  ETMDigitalInitializeInput(&global_data_A36926.digital_hv_off         , ILL_LAMBDA_HV_ON, 30);
-  ETMDigitalInitializeInput(&global_data_A36926.digital_phase_loss     , !ILL_LAMBDA_FAULT_ACTIVE, 30);
-  ETMDigitalInitializeInput(&global_data_A36926.digital_over_temp      , !ILL_LAMBDA_FAULT_ACTIVE, 30);
-  ETMDigitalInitializeInput(&global_data_A36926.digital_interlock      , !ILL_LAMBDA_FAULT_ACTIVE, 30);
-  ETMDigitalInitializeInput(&global_data_A36926.digital_load_flt       , !ILL_LAMBDA_FAULT_ACTIVE, 30);
+  ETMDigitalInitializeInput(&global_data_A37342.digital_hv_not_powered , ILL_LAMBDA_NOT_POWERED, 30);
+  ETMDigitalInitializeInput(&global_data_A37342.digital_sum_flt        , !ILL_LAMBDA_FAULT_ACTIVE, 30);
+  ETMDigitalInitializeInput(&global_data_A37342.digital_hv_off         , ILL_LAMBDA_HV_ON, 30);
+  ETMDigitalInitializeInput(&global_data_A37342.digital_phase_loss     , !ILL_LAMBDA_FAULT_ACTIVE, 30);
+  ETMDigitalInitializeInput(&global_data_A37342.digital_over_temp      , !ILL_LAMBDA_FAULT_ACTIVE, 30);
+  ETMDigitalInitializeInput(&global_data_A37342.digital_interlock      , !ILL_LAMBDA_FAULT_ACTIVE, 30);
+  ETMDigitalInitializeInput(&global_data_A37342.digital_load_flt       , !ILL_LAMBDA_FAULT_ACTIVE, 30);
 
 
   // Initialize the Analog input data structures
-  ETMAnalogInitializeInput(&global_data_A36926.analog_input_lambda_vmon,
+  ETMAnalogInitializeInput(&global_data_A37342.analog_input_lambda_vmon,
     MACRO_DEC_TO_SCALE_FACTOR_16(VMON_SCALE_FACTOR),
     OFFSET_ZERO,
     ANALOG_INPUT_1,
@@ -518,7 +518,7 @@ void InitializeA36926(void) {
     NO_COUNTER
     );
   
-  ETMAnalogInitializeInput(&global_data_A36926.analog_input_lambda_vpeak,
+  ETMAnalogInitializeInput(&global_data_A37342.analog_input_lambda_vpeak,
     MACRO_DEC_TO_SCALE_FACTOR_16(VMON_SCALE_FACTOR),
     OFFSET_ZERO,
     ANALOG_INPUT_2,
@@ -529,7 +529,7 @@ void InitializeA36926(void) {
     NO_COUNTER,
     NO_COUNTER);
   
-  ETMAnalogInitializeInput(&global_data_A36926.analog_input_lambda_imon,
+  ETMAnalogInitializeInput(&global_data_A37342.analog_input_lambda_imon,
     MACRO_DEC_TO_SCALE_FACTOR_16(.40179),
     OFFSET_ZERO,
     ANALOG_INPUT_3,
@@ -540,7 +540,7 @@ void InitializeA36926(void) {
     NO_COUNTER,
     NO_COUNTER);
 
-  ETMAnalogInitializeInput(&global_data_A36926.analog_input_lambda_heat_sink_temp,
+  ETMAnalogInitializeInput(&global_data_A37342.analog_input_lambda_heat_sink_temp,
     MACRO_DEC_TO_SCALE_FACTOR_16(.78125),
     10000,
     ANALOG_INPUT_4,
@@ -551,7 +551,7 @@ void InitializeA36926(void) {
     TRIP_COUNTER_1Sec,
     TRIP_COUNTER_1Sec);
   
-  ETMAnalogInitializeInput(&global_data_A36926.analog_input_5v_mon,
+  ETMAnalogInitializeInput(&global_data_A37342.analog_input_5v_mon,
     MACRO_DEC_TO_SCALE_FACTOR_16(.12500),
     OFFSET_ZERO,
     ANALOG_INPUT_5,
@@ -562,7 +562,7 @@ void InitializeA36926(void) {
     NO_COUNTER,
     NO_COUNTER);
 
-  ETMAnalogInitializeInput(&global_data_A36926.analog_input_15v_mon,
+  ETMAnalogInitializeInput(&global_data_A37342.analog_input_15v_mon,
     MACRO_DEC_TO_SCALE_FACTOR_16(.25063),
     OFFSET_ZERO,
     ANALOG_INPUT_6,
@@ -573,7 +573,7 @@ void InitializeA36926(void) {
     NO_COUNTER,
     NO_COUNTER);
   
-  ETMAnalogInitializeInput(&global_data_A36926.analog_input_neg_15v_mon,
+  ETMAnalogInitializeInput(&global_data_A37342.analog_input_neg_15v_mon,
     MACRO_DEC_TO_SCALE_FACTOR_16(.06250),
     OFFSET_ZERO,
     ANALOG_INPUT_7,
@@ -584,7 +584,7 @@ void InitializeA36926(void) {
     NO_COUNTER,
     NO_COUNTER);
 
-  ETMAnalogInitializeInput(&global_data_A36926.analog_input_pic_adc_test_dac,
+  ETMAnalogInitializeInput(&global_data_A37342.analog_input_pic_adc_test_dac,
     MACRO_DEC_TO_SCALE_FACTOR_16(1),
     OFFSET_ZERO,
     ANALOG_INPUT_8,
@@ -597,7 +597,7 @@ void InitializeA36926(void) {
 
 
     // Initialize the Analog Output Data Structures
-  ETMAnalogInitializeOutput(&global_data_A36926.analog_output_high_energy_vprog,
+  ETMAnalogInitializeOutput(&global_data_A37342.analog_output_high_energy_vprog,
     MACRO_DEC_TO_SCALE_FACTOR_16(VPROG_SCALE_FACTOR),
     OFFSET_ZERO,
     ANALOG_OUTPUT_2,
@@ -605,7 +605,7 @@ void InitializeA36926(void) {
     HV_LAMBDA_MIN_VPROG,
     HV_LAMBDA_DAC_ZERO_OUTPUT);
   
-  ETMAnalogInitializeOutput(&global_data_A36926.analog_output_low_energy_vprog,
+  ETMAnalogInitializeOutput(&global_data_A37342.analog_output_low_energy_vprog,
 			    MACRO_DEC_TO_SCALE_FACTOR_16(VPROG_SCALE_FACTOR),
 			    OFFSET_ZERO,
 			    ANALOG_OUTPUT_3,
@@ -613,7 +613,7 @@ void InitializeA36926(void) {
 			    HV_LAMBDA_MIN_VPROG,
 			    HV_LAMBDA_DAC_ZERO_OUTPUT);
 
-  ETMAnalogInitializeOutput(&global_data_A36926.analog_output_spare,
+  ETMAnalogInitializeOutput(&global_data_A37342.analog_output_spare,
 			    MACRO_DEC_TO_SCALE_FACTOR_16(5.33333),
 			    OFFSET_ZERO,
 			    ANALOG_OUTPUT_0,
@@ -621,7 +621,7 @@ void InitializeA36926(void) {
 			    0,
 			    0);
 
-  ETMAnalogInitializeOutput(&global_data_A36926.analog_output_adc_test,
+  ETMAnalogInitializeOutput(&global_data_A37342.analog_output_adc_test,
 			    MACRO_DEC_TO_SCALE_FACTOR_16(1),
 			    OFFSET_ZERO,
 			    ANALOG_OUTPUT_NO_CALIBRATION,
@@ -630,21 +630,21 @@ void InitializeA36926(void) {
 			    0);
 
 
-  ETMAnalogSetOutput(&global_data_A36926.analog_output_spare, 3000);
-  ETMAnalogSetOutput(&global_data_A36926.analog_output_adc_test, ADC_DAC_TEST_VALUE);
+  ETMAnalogSetOutput(&global_data_A37342.analog_output_spare, 3000);
+  ETMAnalogSetOutput(&global_data_A37342.analog_output_adc_test, ADC_DAC_TEST_VALUE);
 
-  global_data_A36926.analog_output_spare.enabled      = 1;
-  global_data_A36926.analog_output_adc_test.enabled   = 1;
+  global_data_A37342.analog_output_spare.enabled      = 1;
+  global_data_A37342.analog_output_adc_test.enabled   = 1;
 
-  ETMAnalogScaleCalibrateDACSetting(&global_data_A36926.analog_output_spare);
-  ETMAnalogScaleCalibrateDACSetting(&global_data_A36926.analog_output_adc_test);
+  ETMAnalogScaleCalibrateDACSetting(&global_data_A37342.analog_output_spare);
+  ETMAnalogScaleCalibrateDACSetting(&global_data_A37342.analog_output_adc_test);
 
   // Update the spare analog output and the DAC test output
   WriteLTC265XTwoChannels(&U1_LTC2654,
 			  LTC265X_WRITE_AND_UPDATE_DAC_A,
-			  global_data_A36926.analog_output_spare.dac_setting_scaled_and_calibrated,
+			  global_data_A37342.analog_output_spare.dac_setting_scaled_and_calibrated,
 			  LTC265X_WRITE_AND_UPDATE_DAC_B,
-			  global_data_A36926.analog_output_adc_test.dac_setting_scaled_and_calibrated);
+			  global_data_A37342.analog_output_adc_test.dac_setting_scaled_and_calibrated);
   
 
   //Initialize the internal ADC for Startup Power Checks
@@ -709,8 +709,8 @@ void InitializeA36926(void) {
 void EnableHVLambda(void) {
   // Set the enable register in the DAC structure
   // The next time the DAC is updated it will be updated with the most recent high/low energy values
-  global_data_A36926.analog_output_high_energy_vprog.enabled = 1;
-  global_data_A36926.analog_output_low_energy_vprog.enabled = 1;
+  global_data_A37342.analog_output_high_energy_vprog.enabled = 1;
+  global_data_A37342.analog_output_low_energy_vprog.enabled = 1;
 
   // Set digital output to enable HV_ON of the lambda
   PIN_LAMBDA_ENABLE = OLL_ENABLE_LAMBDA;
@@ -736,8 +736,8 @@ void EnableHVLambda(void) {
 void DisableHVLambda(void) {
   // Clear the enable register in the DAC structure
   // The next time the DAC is updated it will be updated with the "disabled" value
-  global_data_A36926.analog_output_high_energy_vprog.enabled = 0;
-  global_data_A36926.analog_output_low_energy_vprog.enabled = 0;
+  global_data_A37342.analog_output_high_energy_vprog.enabled = 0;
+  global_data_A37342.analog_output_low_energy_vprog.enabled = 0;
   
   _INT1IE = 0; 
 
@@ -766,18 +766,18 @@ void __attribute__((interrupt, no_auto_psv)) _ADCInterrupt(void) {
 
   _ADIF = 0;
 
-  if (global_data_A36926.adc_ignore_current_sample) {
+  if (global_data_A37342.adc_ignore_current_sample) {
     // There was a pulse durring the sample sequence.  Throw the data away!!!
-    global_data_A36926.adc_ignore_current_sample = 0;
+    global_data_A37342.adc_ignore_current_sample = 0;
   } else {
     // Copy Data From Buffer to RAM
     if (_BUFS) {
       // read ADCBUF 0-7
-      global_data_A36926.analog_input_lambda_vpeak.adc_accumulator          += ADCBUF0;
-      global_data_A36926.analog_input_lambda_vmon.adc_accumulator           += ADCBUF1;
-      global_data_A36926.analog_input_lambda_imon.adc_accumulator           += ADCBUF2;
-      global_data_A36926.analog_input_lambda_heat_sink_temp.adc_accumulator += ADCBUF4;
-      global_data_A36926.accumulator_counter++;
+      global_data_A37342.analog_input_lambda_vpeak.adc_accumulator          += ADCBUF0;
+      global_data_A37342.analog_input_lambda_vmon.adc_accumulator           += ADCBUF1;
+      global_data_A37342.analog_input_lambda_imon.adc_accumulator           += ADCBUF2;
+      global_data_A37342.analog_input_lambda_heat_sink_temp.adc_accumulator += ADCBUF4;
+      global_data_A37342.accumulator_counter++;
 
       adc_mirror[0x1] = ADCBUF1;
       adc_mirror[0x3] = ADCBUF3;
@@ -786,11 +786,11 @@ void __attribute__((interrupt, no_auto_psv)) _ADCInterrupt(void) {
       adc_mirror_latest_update = 1;
     } else {
       // read ADCBUF 8-15
-      global_data_A36926.analog_input_lambda_vpeak.adc_accumulator          += ADCBUF8;
-      global_data_A36926.analog_input_lambda_vmon.adc_accumulator           += ADCBUF9;
-      global_data_A36926.analog_input_lambda_imon.adc_accumulator           += ADCBUFA;
-      global_data_A36926.analog_input_lambda_heat_sink_temp.adc_accumulator += ADCBUFC;
-      global_data_A36926.accumulator_counter++;
+      global_data_A37342.analog_input_lambda_vpeak.adc_accumulator          += ADCBUF8;
+      global_data_A37342.analog_input_lambda_vmon.adc_accumulator           += ADCBUF9;
+      global_data_A37342.analog_input_lambda_imon.adc_accumulator           += ADCBUFA;
+      global_data_A37342.analog_input_lambda_heat_sink_temp.adc_accumulator += ADCBUFC;
+      global_data_A37342.accumulator_counter++;
 
       adc_mirror[0x9] = ADCBUF9;
       adc_mirror[0xB] = ADCBUFB;
@@ -800,43 +800,43 @@ void __attribute__((interrupt, no_auto_psv)) _ADCInterrupt(void) {
     }
     
     
-    if (global_data_A36926.accumulator_counter >= 128) {
+    if (global_data_A37342.accumulator_counter >= 128) {
 
-      global_data_A36926.analog_input_lambda_vmon.adc_accumulator >>= 3;  // This is now a 16 bit number average of previous 128 samples 
-      global_data_A36926.analog_input_lambda_vmon.filtered_adc_reading = global_data_A36926.analog_input_lambda_vmon.adc_accumulator;
-      global_data_A36926.analog_input_lambda_vmon.adc_accumulator = 0;
+      global_data_A37342.analog_input_lambda_vmon.adc_accumulator >>= 3;  // This is now a 16 bit number average of previous 128 samples 
+      global_data_A37342.analog_input_lambda_vmon.filtered_adc_reading = global_data_A37342.analog_input_lambda_vmon.adc_accumulator;
+      global_data_A37342.analog_input_lambda_vmon.adc_accumulator = 0;
       
-      global_data_A36926.analog_input_lambda_vpeak.adc_accumulator >>= 3;  // This is now a 16 bit number average of previous 128 samples 
-      global_data_A36926.analog_input_lambda_vpeak.filtered_adc_reading = global_data_A36926.analog_input_lambda_vpeak.adc_accumulator;
-      global_data_A36926.analog_input_lambda_vpeak.adc_accumulator = 0;
+      global_data_A37342.analog_input_lambda_vpeak.adc_accumulator >>= 3;  // This is now a 16 bit number average of previous 128 samples 
+      global_data_A37342.analog_input_lambda_vpeak.filtered_adc_reading = global_data_A37342.analog_input_lambda_vpeak.adc_accumulator;
+      global_data_A37342.analog_input_lambda_vpeak.adc_accumulator = 0;
       
-      global_data_A36926.analog_input_lambda_imon.adc_accumulator >>= 3;  // This is now a 16 bit number average of previous 128 samples 
-      global_data_A36926.analog_input_lambda_imon.filtered_adc_reading = global_data_A36926.analog_input_lambda_imon.adc_accumulator;
-      global_data_A36926.analog_input_lambda_imon.adc_accumulator = 0;
+      global_data_A37342.analog_input_lambda_imon.adc_accumulator >>= 3;  // This is now a 16 bit number average of previous 128 samples 
+      global_data_A37342.analog_input_lambda_imon.filtered_adc_reading = global_data_A37342.analog_input_lambda_imon.adc_accumulator;
+      global_data_A37342.analog_input_lambda_imon.adc_accumulator = 0;
 
 
-      global_data_A36926.analog_input_lambda_heat_sink_temp.adc_accumulator >>= 3;  // This is now a 16 bit number average of previous 128 samples 
-      global_data_A36926.analog_input_lambda_heat_sink_temp.filtered_adc_reading = global_data_A36926.analog_input_lambda_heat_sink_temp.adc_accumulator;
-      global_data_A36926.analog_input_lambda_heat_sink_temp.adc_accumulator = 0;
+      global_data_A37342.analog_input_lambda_heat_sink_temp.adc_accumulator >>= 3;  // This is now a 16 bit number average of previous 128 samples 
+      global_data_A37342.analog_input_lambda_heat_sink_temp.filtered_adc_reading = global_data_A37342.analog_input_lambda_heat_sink_temp.adc_accumulator;
+      global_data_A37342.analog_input_lambda_heat_sink_temp.adc_accumulator = 0;
       
-      global_data_A36926.analog_input_15v_mon.adc_accumulator >>= 3;  // This is now a 16 bit number average of previous 128 samples 
-      global_data_A36926.analog_input_15v_mon.filtered_adc_reading = global_data_A36926.analog_input_15v_mon.adc_accumulator;
-      global_data_A36926.analog_input_15v_mon.adc_accumulator = 0;
+      global_data_A37342.analog_input_15v_mon.adc_accumulator >>= 3;  // This is now a 16 bit number average of previous 128 samples 
+      global_data_A37342.analog_input_15v_mon.filtered_adc_reading = global_data_A37342.analog_input_15v_mon.adc_accumulator;
+      global_data_A37342.analog_input_15v_mon.adc_accumulator = 0;
       
-      global_data_A36926.analog_input_neg_15v_mon.adc_accumulator >>= 3;  // This is now a 16 bit number average of previous 128 samples 
-      global_data_A36926.analog_input_neg_15v_mon.filtered_adc_reading = global_data_A36926.analog_input_neg_15v_mon.adc_accumulator;
-      global_data_A36926.analog_input_neg_15v_mon.adc_accumulator = 0;            
+      global_data_A37342.analog_input_neg_15v_mon.adc_accumulator >>= 3;  // This is now a 16 bit number average of previous 128 samples 
+      global_data_A37342.analog_input_neg_15v_mon.filtered_adc_reading = global_data_A37342.analog_input_neg_15v_mon.adc_accumulator;
+      global_data_A37342.analog_input_neg_15v_mon.adc_accumulator = 0;            
 
-      global_data_A36926.analog_input_5v_mon.adc_accumulator >>= 3;  // This is now a 16 bit number average of previous 128 samples 
-      global_data_A36926.analog_input_5v_mon.filtered_adc_reading = global_data_A36926.analog_input_5v_mon.adc_accumulator;
-      global_data_A36926.analog_input_5v_mon.adc_accumulator = 0;
+      global_data_A37342.analog_input_5v_mon.adc_accumulator >>= 3;  // This is now a 16 bit number average of previous 128 samples 
+      global_data_A37342.analog_input_5v_mon.filtered_adc_reading = global_data_A37342.analog_input_5v_mon.adc_accumulator;
+      global_data_A37342.analog_input_5v_mon.adc_accumulator = 0;
 
-      global_data_A36926.analog_input_pic_adc_test_dac.adc_accumulator >>= 3;  // This is now a 16 bit number average of previous 128 samples 
-      global_data_A36926.analog_input_pic_adc_test_dac.filtered_adc_reading = global_data_A36926.analog_input_pic_adc_test_dac.adc_accumulator;
-      global_data_A36926.analog_input_pic_adc_test_dac.adc_accumulator = 0;
+      global_data_A37342.analog_input_pic_adc_test_dac.adc_accumulator >>= 3;  // This is now a 16 bit number average of previous 128 samples 
+      global_data_A37342.analog_input_pic_adc_test_dac.filtered_adc_reading = global_data_A37342.analog_input_pic_adc_test_dac.adc_accumulator;
+      global_data_A37342.analog_input_pic_adc_test_dac.adc_accumulator = 0;
       
       
-      global_data_A36926.accumulator_counter = 0;
+      global_data_A37342.accumulator_counter = 0;
     }
   }
 }
@@ -867,8 +867,8 @@ void __attribute__((__interrupt__(__preprologue__("BCLR LATD, #0")), shadow, no_
   charge_period = TMR2;
   TMR2 = 0;
   _T2IF = 0;
-  if (global_data_A36926.first_pulse) {
-    global_data_A36926.first_pulse = 0;
+  if (global_data_A37342.first_pulse) {
+    global_data_A37342.first_pulse = 0;
     charge_period = TMR1_LAMBDA_CHARGE_PERIOD;
   }
   if (charge_period <= TMR1_LAMBDA_CHARGE_PERIOD) {
@@ -890,7 +890,7 @@ void __attribute__((__interrupt__(__preprologue__("BCLR LATD, #0")), shadow, no_
     adc_mirror_3B = adc_mirror[0xB];
     adc_mirror_5D = adc_mirror[0xD];
     
-    global_data_A36926.vprog_pre_pulse = adc_mirror[0xC];
+    global_data_A37342.vprog_pre_pulse = adc_mirror[0xC];
   } else {
     // The ADC is currently filling 0x0 - 0x7
     latest_adc_reading_B3 = adc_mirror[0xB];
@@ -903,7 +903,7 @@ void __attribute__((__interrupt__(__preprologue__("BCLR LATD, #0")), shadow, no_
     adc_mirror_3B = adc_mirror[0x3];
     adc_mirror_5D = adc_mirror[0x5];
 
-    global_data_A36926.vprog_pre_pulse = adc_mirror[0x4];
+    global_data_A37342.vprog_pre_pulse = adc_mirror[0x4];
   }
   
   // Setup timer1 to time the inhibit period
@@ -913,23 +913,23 @@ void __attribute__((__interrupt__(__preprologue__("BCLR LATD, #0")), shadow, no_
   T1CONbits.TON = 1;
   _T1IF = 0;
   
-  if (global_data_A36926.run_post_pulse_process) {
+  if (global_data_A37342.run_post_pulse_process) {
     // We never completed the post pulse process.  
-    global_data_A36926.post_pulse_did_not_run_counter++;
+    global_data_A37342.post_pulse_did_not_run_counter++;
   }
   
-  global_data_A36926.previous_pulse_id = global_data_A36926.pulse_id;
-  global_data_A36926.pulse_id = ETMCanSlaveGetPulseCount();
-  if (global_data_A36926.previous_pulse_id == global_data_A36926.pulse_id) {
+  global_data_A37342.previous_pulse_id = global_data_A37342.pulse_id;
+  global_data_A37342.pulse_id = ETMCanSlaveGetPulseCount();
+  if (global_data_A37342.previous_pulse_id == global_data_A37342.pulse_id) {
     // We did not receive a message from the PULSE SYNC board between pulses
     // There should not have been a trigger
-    global_data_A36926.false_trigger_total_count++;
-    global_data_A36926.false_trigger_counter++;
+    global_data_A37342.false_trigger_total_count++;
+    global_data_A37342.false_trigger_counter++;
   }
 
   if (_T1IE) {
     // If timer one is enabled then we did not complete the Charge period before the next pulse
-    global_data_A36926.charge_period_error_counter++;
+    global_data_A37342.charge_period_error_counter++;
   }
   
   _T1IE = 0;
@@ -939,30 +939,30 @@ void __attribute__((__interrupt__(__preprologue__("BCLR LATD, #0")), shadow, no_
     // Either ADCBUF3/B has not been updated yet (or the value did not change over the previous 12 samples in which case we can use any value)
     if (latest_adc_reading_19 == adc_mirror_19) {
       // We have not updated ADCBUF1/9 yet (or again the value did not change in which case any value is valid)
-      //global_data_A36926.vmon_pre_pulse = latest_adc_reading_D5; // This sample is (32 TAD -> 50 TAD) Old
-      global_data_A36926.vmon_pre_pulse = latest_adc_reading_B3; // This sample is (68 TAD -> 86 TAD) Old
+      //global_data_A37342.vmon_pre_pulse = latest_adc_reading_D5; // This sample is (32 TAD -> 50 TAD) Old
+      global_data_A37342.vmon_pre_pulse = latest_adc_reading_B3; // This sample is (68 TAD -> 86 TAD) Old
     } else {
       // We have updated ADCBUF1/9 
-      global_data_A36926.vmon_pre_pulse = latest_adc_reading_D5; // This sample is (50 TAD -> 86 TAD) Old
+      global_data_A37342.vmon_pre_pulse = latest_adc_reading_D5; // This sample is (50 TAD -> 86 TAD) Old
       //if (latest_adc_reading_19 < latest_adc_reading_D5) {
-      //global_data_A36926.vmon_pre_pulse = latest_adc_reading_D5; // This sample is (50 TAD -> 86 TAD) Old
+      //global_data_A37342.vmon_pre_pulse = latest_adc_reading_D5; // This sample is (50 TAD -> 86 TAD) Old
       //} else {
-      //global_data_A36926.vmon_pre_pulse = latest_adc_reading_19; // This sample is (14 TAD -> 50 TAD) OLD
+      //global_data_A37342.vmon_pre_pulse = latest_adc_reading_19; // This sample is (14 TAD -> 50 TAD) OLD
       //}
     }
   } else {
     // ADCBUF3/B has been updated
     if (latest_adc_reading_5D == adc_mirror_5D) {
       // We have not updated ADCBUF5/D yet (or the value did not change in which case any value is valid)
-      //global_data_A36926.vmon_pre_pulse = latest_adc_reading_3B; // This sample is (32 TAD -> 50 TAD) Old
-      global_data_A36926.vmon_pre_pulse = latest_adc_reading_19; // This sample is (68 TAD -> 86 TAD) Old 
+      //global_data_A37342.vmon_pre_pulse = latest_adc_reading_3B; // This sample is (32 TAD -> 50 TAD) Old
+      global_data_A37342.vmon_pre_pulse = latest_adc_reading_19; // This sample is (68 TAD -> 86 TAD) Old 
     } else {
       // We have updated ADCBUF5/D
-      global_data_A36926.vmon_pre_pulse = latest_adc_reading_3B; // This sample is (50 TAD -> 86 TAD) Old
+      global_data_A37342.vmon_pre_pulse = latest_adc_reading_3B; // This sample is (50 TAD -> 86 TAD) Old
       //if (latest_adc_reading_5D < latest_adc_reading_3B) {
-      //global_data_A36926.vmon_pre_pulse = latest_adc_reading_3B; // This sample is (50 TAD -> 86 TAD) Old
+      //global_data_A37342.vmon_pre_pulse = latest_adc_reading_3B; // This sample is (50 TAD -> 86 TAD) Old
       //} else {
-      //global_data_A36926.vmon_pre_pulse = latest_adc_reading_5D; // This sample is (14 TAD -> 50 TAD) OLD
+      //global_data_A37342.vmon_pre_pulse = latest_adc_reading_5D; // This sample is (14 TAD -> 50 TAD) OLD
       //}
     } 
   }
@@ -989,10 +989,10 @@ void __attribute__((__interrupt__(__preprologue__("BCLR LATD, #0")), shadow, no_
   
   
   
-  global_data_A36926.run_post_pulse_process = 1;     // This tells the main control loop that a pulse has occured and that it should run the post pulse process once (and only once) 
-  global_data_A36926.adc_ignore_current_sample = 1;  // This allows the internal ADC ISR to know that there was a pulse and to discard all the data from the sequence where the pulse occured
+  global_data_A37342.run_post_pulse_process = 1;     // This tells the main control loop that a pulse has occured and that it should run the post pulse process once (and only once) 
+  global_data_A37342.adc_ignore_current_sample = 1;  // This allows the internal ADC ISR to know that there was a pulse and to discard all the data from the sequence where the pulse occured
   
-  global_data_A36926.pulse_counter++;
+  global_data_A37342.pulse_counter++;
   
   _INT1IF = 0;
 }
@@ -1024,7 +1024,7 @@ void __attribute__((interrupt, no_auto_psv)) _T1Interrupt(void) {
   _T1IE = 0;         // Disable the interrupt (This will be enabled the next time that a capacitor charging sequence starts)
   T1CONbits.TON = 0;   // Stop the timer from incrementing (Again this will be restarted with the next time the capacitor charge sequence starts)
 
-  if (global_data_A36926.control_state != STATE_POWER_UP) {
+  if (global_data_A37342.control_state != STATE_POWER_UP) {
     PIN_LAMBDA_INHIBIT = OLL_INHIBIT_LAMBDA;  // INHIBIT the lambda
   }
 
@@ -1077,19 +1077,19 @@ void __attribute__((interrupt, no_auto_psv)) _T1Interrupt(void) {
   }
 
   if (PIN_LAMBDA_VOLTAGE_SELECT == OLL_LAMBDA_VOLTAGE_SELECT_LOW_ENERGY) {
-    minimum_vmon_at_eoc = ETMScaleFactor2(global_data_A36926.analog_output_low_energy_vprog.set_point, MACRO_DEC_TO_CAL_FACTOR_2(.95), 0);
+    minimum_vmon_at_eoc = ETMScaleFactor2(global_data_A37342.analog_output_low_energy_vprog.set_point, MACRO_DEC_TO_CAL_FACTOR_2(.95), 0);
   } else {
-    minimum_vmon_at_eoc = ETMScaleFactor2(global_data_A36926.analog_output_high_energy_vprog.set_point, MACRO_DEC_TO_CAL_FACTOR_2(.95), 0);
+    minimum_vmon_at_eoc = ETMScaleFactor2(global_data_A37342.analog_output_high_energy_vprog.set_point, MACRO_DEC_TO_CAL_FACTOR_2(.95), 0);
   }
 
-  global_data_A36926.vmon_at_eoc_period = ETMScaleFactor16(vmon << 4, MACRO_DEC_TO_SCALE_FACTOR_16(VMON_SCALE_FACTOR), OFFSET_ZERO);
+  global_data_A37342.vmon_at_eoc_period = ETMScaleFactor16(vmon << 4, MACRO_DEC_TO_SCALE_FACTOR_16(VMON_SCALE_FACTOR), OFFSET_ZERO);
 
   // Check that we reached EOC
-  if (global_data_A36926.vmon_at_eoc_period > minimum_vmon_at_eoc) {
-    global_data_A36926.lambda_reached_eoc = 1;
+  if (global_data_A37342.vmon_at_eoc_period > minimum_vmon_at_eoc) {
+    global_data_A37342.lambda_reached_eoc = 1;
   } else {
-    global_data_A36926.eoc_not_reached_count++;
-    global_data_A36926.lambda_reached_eoc = 0;
+    global_data_A37342.eoc_not_reached_count++;
+    global_data_A37342.lambda_reached_eoc = 0;
   }
 }  
 
@@ -1104,8 +1104,8 @@ void ETMCanSlaveExecuteCMDBoardSpecific(ETMCanMessage* message_ptr) {
 	Place all board specific commands here
       */
     case ETM_CAN_REGISTER_HV_LAMBDA_SET_1_LAMBDA_SET_POINT:
-      ETMAnalogSetOutput(&global_data_A36926.analog_output_high_energy_vprog, message_ptr->word1); 
-      ETMAnalogSetOutput(&global_data_A36926.analog_output_low_energy_vprog,message_ptr->word2);
+      ETMAnalogSetOutput(&global_data_A37342.analog_output_high_energy_vprog, message_ptr->word1); 
+      ETMAnalogSetOutput(&global_data_A37342.analog_output_low_energy_vprog,message_ptr->word2);
       _CONTROL_NOT_CONFIGURED = 0;
       setup_done = 1;
       break;

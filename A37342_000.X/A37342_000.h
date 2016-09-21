@@ -1,5 +1,5 @@
-#ifndef __A36926_000_H
-#define __A36926_000_H
+#ifndef __A37342_000_H
+#define __A37342_000_H
 
 #include <xc.h>
 #include <adc12.h>
@@ -39,7 +39,7 @@
 
 
 
-// ---------- BASE A36926 I/O CONFIGURATION ----------------- //
+// ---------- BASE A37342 I/O CONFIGURATION ----------------- //
  
 #define PIC_DIG_IN_1      _RD8
 #define PIC_DIG_IN_2      _RD9
@@ -100,16 +100,16 @@
   G12,G13
 */
 
-#define A36926_TRISA_VALUE 0b1111111110111111
-#define A36926_TRISB_VALUE 0b1011111111111111
-#define A36926_TRISC_VALUE 0b1111111111111111
-#define A36926_TRISD_VALUE 0b1111111111110000
-#define A36926_TRISF_VALUE 0b1111111101110011
-#define A36926_TRISG_VALUE 0b1100111111111111
+#define A37342_TRISA_VALUE 0b1111111110111111
+#define A37342_TRISB_VALUE 0b1011111111111111
+#define A37342_TRISC_VALUE 0b1111111111111111
+#define A37342_TRISD_VALUE 0b1111111111110000
+#define A37342_TRISF_VALUE 0b1111111101110011
+#define A37342_TRISG_VALUE 0b1100111111111111
 
 
 
-// ----------------------- CONFIGURE PINS FROM ALAL A36926-000 Code ----------------- //
+// ----------------------- CONFIGURE PINS FROM ALAL A37342-000 Code ----------------- //
 
 
 // -------- Digital Input Pins ----------//
@@ -296,7 +296,7 @@ typedef struct {
 
 } LambdaControlData;
 
-extern LambdaControlData global_data_A36926;
+extern LambdaControlData global_data_A37342;
 
 
 // State Definitions
