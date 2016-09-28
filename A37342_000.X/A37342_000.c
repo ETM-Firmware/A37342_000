@@ -238,7 +238,7 @@ void DoA37342(void) {
     global_data_A37342.prf_ok = 0;
 
     if (PIN_LAMBDA_ENABLE == OLL_ENABLE_LAMBDA) {
-      PIN_LAMBDA_ENABLE = !OLL_INHIBIT_LAMBDA;
+      PIN_LAMBDA_INHIBIT = !OLL_INHIBIT_LAMBDA;
     }
   }
 
