@@ -292,7 +292,7 @@ typedef struct {
   unsigned int hv_lambda_power_wait;
   unsigned int lambda_reached_eoc;
 
-  unsigned int first_pulse;
+  unsigned int prf_ok;
 
 } LambdaControlData;
 

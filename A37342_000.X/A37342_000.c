@@ -227,9 +227,21 @@ void DoA37342(void) {
   ETMCanSlaveDoCan();
 
   if (_T2IF) {
-    global_data_A37342.first_pulse = 1;
+    /*
+      The timer rolled, We are pulsing at less than 19Hz
+      DO NOT Disable the Lambda Supply at the end of the next charge period
+      
+      When we stop pulsing the lambda will get disabled after the last pulse
+      We must re-enable it so that the voltage does not drop before the next run
+    */
+    
+    global_data_A37342.prf_ok = 0;
+
+    if (PIN_LAMBDA_ENABLE == OLL_ENABLE_LAMBDA) {
+      PIN_LAMBDA_ENABLE = !OLL_INHIBIT_LAMBDA;
+    }
   }
-  
+
   if (ETMCanSlaveIsNextPulseLevelHigh()) {
     PIN_LAMBDA_VOLTAGE_SELECT = !OLL_LAMBDA_VOLTAGE_SELECT_LOW_ENERGY;
     _STATUS_LAMBDA_HIGH_ENERGY = 1;
@@ -718,13 +730,13 @@ void EnableHVLambda(void) {
   // Set digital output to inhibit the lambda
   PIN_LAMBDA_INHIBIT = !OLL_INHIBIT_LAMBDA;
   
-  T1CONbits.TON = 0;
+  //T1CONbits.TON = 0;
   //PR1 = (TMR1_LAMBDA_CHARGE_PERIOD - TMR1_DELAY_HOLDOFF);
-  PR1 = TMR1_LAMBDA_STARTUP_CHARGE_PERIOD;
-  TMR1 = 0;
-  _T1IF = 0;
-  _T1IE = 1;
-  T1CONbits.TON = 1;
+  //PR1 = TMR1_LAMBDA_STARTUP_CHARGE_PERIOD;
+  //TMR1 = 0;
+  //_T1IF = 0;
+  //_T1IE = 1;
+  //T1CONbits.TON = 1;
   
   _INT1IF = 0;
   _INT1IE = 1;  
@@ -866,18 +878,18 @@ void __attribute__((__interrupt__(__preprologue__("BCLR LATD, #0")), shadow, no_
 
   charge_period = TMR2;
   TMR2 = 0;
-  _T2IF = 0;
-  if (global_data_A37342.first_pulse) {
-    global_data_A37342.first_pulse = 0;
-    charge_period = TMR1_LAMBDA_CHARGE_PERIOD;
+  global_data_A37342.prf_ok = 1;
+  if (_T2IF) {
+    // The timer rolled, We are pulsing at less than 19Hz
+    // DO NOT Disable the Lambda Supply at the end of the next charge period
+    global_data_A37342.prf_ok = 0;
   }
+  _T2IF = 0;
   if (charge_period <= TMR1_LAMBDA_CHARGE_PERIOD) {
     charge_period = TMR1_LAMBDA_CHARGE_PERIOD;
   }
   charge_period -= 160;  // Subtract 128uS
-  
-
-
+    
   if (adc_mirror_latest_update) {
     // The ADC is currently filling 0x8 - 0xF
     latest_adc_reading_B3 = adc_mirror[0x3];
@@ -1013,18 +1025,19 @@ void __attribute__((interrupt, no_auto_psv)) _T1Interrupt(void) {
   unsigned int minimum_vmon_at_eoc;
 
   /*
-    This interrupt indicates that the cap charger should have finished charging and it is time to enable the trigger pulse.
+    This interrupt indicates that the cap charger should have finished charging
+    This interrupt is called X us after a pulse is recieved.
+    It samples the lambda voltage and Disables the lambda so that it will not cause the thyratron to latch
+    If the PRF is less than a minimum value (~19.5 Hz), the lambda will not be disabled
 
-    This interrupt is called X us after charging starts
-    If the lambda is not at EOC, it does not enable the trigger and sets the Lambda EOC Timeout Fault bit
-    If the lambda is at EOC, It enables the trigger & sets status bits to show that the lambda is not charging and that the system is ready to fire.    
+    If the lambda voltage is too low, the lambda eoc not reached bit is set
   */
 
   _T1IF = 0;         // Clear the interrupt flag
   _T1IE = 0;         // Disable the interrupt (This will be enabled the next time that a capacitor charging sequence starts)
   T1CONbits.TON = 0;   // Stop the timer from incrementing (Again this will be restarted with the next time the capacitor charge sequence starts)
 
-  if (global_data_A37342.control_state != STATE_POWER_UP) {
+  if (global_data_A37342.prf_ok) {
     PIN_LAMBDA_INHIBIT = OLL_INHIBIT_LAMBDA;  // INHIBIT the lambda
   }
 
@@ -1077,9 +1090,9 @@ void __attribute__((interrupt, no_auto_psv)) _T1Interrupt(void) {
   }
 
   if (PIN_LAMBDA_VOLTAGE_SELECT == OLL_LAMBDA_VOLTAGE_SELECT_LOW_ENERGY) {
-    minimum_vmon_at_eoc = ETMScaleFactor2(global_data_A37342.analog_output_low_energy_vprog.set_point, MACRO_DEC_TO_CAL_FACTOR_2(.95), 0);
+    minimum_vmon_at_eoc = ETMScaleFactor2(global_data_A37342.analog_output_low_energy_vprog.set_point, MACRO_DEC_TO_CAL_FACTOR_2(.90), 0);
   } else {
-    minimum_vmon_at_eoc = ETMScaleFactor2(global_data_A37342.analog_output_high_energy_vprog.set_point, MACRO_DEC_TO_CAL_FACTOR_2(.95), 0);
+    minimum_vmon_at_eoc = ETMScaleFactor2(global_data_A37342.analog_output_high_energy_vprog.set_point, MACRO_DEC_TO_CAL_FACTOR_2(.90), 0);
   }
 
   global_data_A37342.vmon_at_eoc_period = ETMScaleFactor16(vmon << 4, MACRO_DEC_TO_SCALE_FACTOR_16(VMON_SCALE_FACTOR), OFFSET_ZERO);
