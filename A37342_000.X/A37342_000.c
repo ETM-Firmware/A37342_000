@@ -108,9 +108,7 @@ void DoStateMachine(void) {
     while (global_data_A37342.control_state == STATE_WAITING_FOR_POWER) {
       DoA37342();
       
-      if (!ETMCanSlaveGetSyncMsgSystemHVDisable()) {
-	global_data_A37342.hv_lambda_power_wait++;
-      } else {
+      if (ETMCanSlaveGetSyncMsgSystemHVDisable()) {
 	global_data_A37342.hv_lambda_power_wait = 0;
       }
 
@@ -130,6 +128,7 @@ void DoStateMachine(void) {
     EnableHVLambda();
     _CONTROL_NOT_READY = 1;
     running_persistent = 0;
+    global_data_A37342.hv_lambda_power_wait = 0;
     while (global_data_A37342.control_state == STATE_POWER_UP) {
       DoA37342();
       
@@ -143,6 +142,10 @@ void DoStateMachine(void) {
       
       if (_FAULT_REGISTER != 0) {
 	global_data_A37342.control_state = STATE_FAULT_WAIT;
+      }
+      
+      if ((PIN_LAMBDA_SUM_FLT == ILL_LAMBDA_FAULT_ACTIVE) && (global_data_A37342.hv_lambda_power_wait > AC_POWER_UP_DELAY)) {
+	global_data_A37342.control_state = STATE_WAITING_FOR_POWER;
       }
     }
     break;
@@ -260,6 +263,7 @@ void DoA37342(void) {
     // Timer has expired so execute the scheduled code (should be once every 10ms unless the configuration file is changes
     _T3IF = 0;
     
+    global_data_A37342.hv_lambda_power_wait++;
 
     // Update debugging information
     ETMCanSlaveSetDebugRegister(0, global_data_A37342.analog_input_lambda_vmon.reading_scaled_and_calibrated);
