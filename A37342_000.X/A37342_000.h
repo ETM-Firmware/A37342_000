@@ -13,6 +13,7 @@
 #define FCY_CLK     10000000
 #define FCY_CLK_MHZ 10
 
+#define __LCS1202
 
 
 // DPARKER move timer 5 to timer 3
