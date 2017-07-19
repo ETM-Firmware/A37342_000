@@ -500,7 +500,7 @@ void InitializeA37342(void) {
 
   // Initialize the Can module
   ETMCanSlaveInitialize(CAN_PORT_1, FCY_CLK, ETM_CAN_ADDR_HV_LAMBDA_BOARD, _PIN_RG13, 4, _PIN_RA7, _PIN_RG12);
-  ETMCanSlaveLoadConfiguration(37342, 0, FIRMWARE_AGILE_REV, FIRMWARE_BRANCH, FIRMWARE_BRANCH_REV);
+  ETMCanSlaveLoadConfiguration(37342, 495, FIRMWARE_AGILE_REV, FIRMWARE_BRANCH, FIRMWARE_BRANCH_REV);
 
 
   if (do_fast_startup) {
@@ -525,7 +525,7 @@ void InitializeA37342(void) {
   ETMAnalogInitializeInput(&global_data_A37342.analog_input_lambda_vmon,
     MACRO_DEC_TO_SCALE_FACTOR_16(VMON_SCALE_FACTOR),
     OFFSET_ZERO,
-    ANALOG_INPUT_1,
+    ANALOG_INPUT_NO_CALIBRATION,
     NO_OVER_TRIP,
     NO_UNDER_TRIP,
     NO_TRIP_SCALE,
@@ -537,7 +537,7 @@ void InitializeA37342(void) {
   ETMAnalogInitializeInput(&global_data_A37342.analog_input_lambda_vpeak,
     MACRO_DEC_TO_SCALE_FACTOR_16(VMON_SCALE_FACTOR),
     OFFSET_ZERO,
-    ANALOG_INPUT_2,
+    ANALOG_INPUT_NO_CALIBRATION,
     NO_OVER_TRIP,
     NO_UNDER_TRIP,
     NO_TRIP_SCALE,
@@ -548,7 +548,7 @@ void InitializeA37342(void) {
   ETMAnalogInitializeInput(&global_data_A37342.analog_input_lambda_imon,
     MACRO_DEC_TO_SCALE_FACTOR_16(.40179),
     OFFSET_ZERO,
-    ANALOG_INPUT_3,
+    ANALOG_INPUT_NO_CALIBRATION,
     NO_OVER_TRIP,
     NO_UNDER_TRIP,
     NO_TRIP_SCALE,
@@ -559,7 +559,7 @@ void InitializeA37342(void) {
   ETMAnalogInitializeInput(&global_data_A37342.analog_input_lambda_heat_sink_temp,
     MACRO_DEC_TO_SCALE_FACTOR_16(.78125),
     10000,
-    ANALOG_INPUT_4,
+    ANALOG_INPUT_NO_CALIBRATION,
     LAMBDA_HEATSINK_OVER_TEMP,
     NO_UNDER_TRIP,
     NO_TRIP_SCALE,
@@ -570,7 +570,7 @@ void InitializeA37342(void) {
   ETMAnalogInitializeInput(&global_data_A37342.analog_input_5v_mon,
     MACRO_DEC_TO_SCALE_FACTOR_16(.12500),
     OFFSET_ZERO,
-    ANALOG_INPUT_5,
+    ANALOG_INPUT_NO_CALIBRATION,
     PWR_5V_OVER_FLT,
     PWR_5V_UNDER_FLT,
     NO_TRIP_SCALE,
@@ -581,7 +581,7 @@ void InitializeA37342(void) {
   ETMAnalogInitializeInput(&global_data_A37342.analog_input_15v_mon,
     MACRO_DEC_TO_SCALE_FACTOR_16(.25063),
     OFFSET_ZERO,
-    ANALOG_INPUT_6,
+    ANALOG_INPUT_NO_CALIBRATION,
     PWR_15V_OVER_FLT,
     PWR_15V_UNDER_FLT,
     NO_TRIP_SCALE,
@@ -592,7 +592,7 @@ void InitializeA37342(void) {
   ETMAnalogInitializeInput(&global_data_A37342.analog_input_neg_15v_mon,
     MACRO_DEC_TO_SCALE_FACTOR_16(.06250),
     OFFSET_ZERO,
-    ANALOG_INPUT_7,
+    ANALOG_INPUT_NO_CALIBRATION,
     PWR_NEG_15V_OVER_FLT,
     PWR_NEG_15V_UNDER_FLT,
     NO_TRIP_SCALE,
@@ -603,7 +603,7 @@ void InitializeA37342(void) {
   ETMAnalogInitializeInput(&global_data_A37342.analog_input_pic_adc_test_dac,
     MACRO_DEC_TO_SCALE_FACTOR_16(1),
     OFFSET_ZERO,
-    ANALOG_INPUT_8,
+    ANALOG_INPUT_NO_CALIBRATION,
     ADC_DAC_TEST_OVER_FLT,
     ADC_DAC_TEST_UNDER_FLT,
     NO_TRIP_SCALE,
@@ -616,7 +616,7 @@ void InitializeA37342(void) {
   ETMAnalogInitializeOutput(&global_data_A37342.analog_output_high_energy_vprog,
     MACRO_DEC_TO_SCALE_FACTOR_16(VPROG_SCALE_FACTOR),
     OFFSET_ZERO,
-    ANALOG_OUTPUT_2,
+    ANALOG_OUTPUT_NO_CALIBRATION,
     HV_LAMBDA_MAX_VPROG,
     HV_LAMBDA_MIN_VPROG,
     HV_LAMBDA_DAC_ZERO_OUTPUT);
@@ -624,7 +624,7 @@ void InitializeA37342(void) {
   ETMAnalogInitializeOutput(&global_data_A37342.analog_output_low_energy_vprog,
 			    MACRO_DEC_TO_SCALE_FACTOR_16(VPROG_SCALE_FACTOR),
 			    OFFSET_ZERO,
-			    ANALOG_OUTPUT_3,
+			    ANALOG_OUTPUT_NO_CALIBRATION,
 			    HV_LAMBDA_MAX_VPROG,
 			    HV_LAMBDA_MIN_VPROG,
 			    HV_LAMBDA_DAC_ZERO_OUTPUT);
@@ -632,7 +632,7 @@ void InitializeA37342(void) {
   ETMAnalogInitializeOutput(&global_data_A37342.analog_output_spare,
 			    MACRO_DEC_TO_SCALE_FACTOR_16(5.33333),
 			    OFFSET_ZERO,
-			    ANALOG_OUTPUT_0,
+			    ANALOG_OUTPUT_NO_CALIBRATION,
 			    10000,
 			    0,
 			    0);
