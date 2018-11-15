@@ -13,8 +13,8 @@
 #define FCY_CLK     10000000
 #define FCY_CLK_MHZ 10
 
-#define __LCS1202
-
+//#define __LCS1202
+#define __LCS1202_25KV
 
 // DPARKER move timer 5 to timer 3
 
@@ -330,35 +330,29 @@ extern LambdaControlData global_data_A37342;
 
 
 
-
-
-
-
-
-
-
-
-
-
-
 // MOVE TO SETTINGS FILE
-
-
-
 
 
 
 #ifdef __LCS1202
 #define VPROG_SCALE_FACTOR 2.66667
 #define VMON_SCALE_FACTOR  .31250
+#elseif __LCS1202_25KV
+#define VPROG_SCALE_FACTOR 2.13125
+#define VMON_SCALE_FACTOR  .3906
 #else
 #define VPROG_SCALE_FACTOR 2.96296
 #define VMON_SCALE_FACTOR  .28125
 #endif
 
 
-// Settings for the HV Lambda 
+// Settings for the HV Lambda
+#ifdef __LCS1202_25KV
+#define HV_LAMBDA_MAX_VPROG            22100
+#else
 #define HV_LAMBDA_MAX_VPROG            19000
+#endif
+
 #define HV_LAMBDA_MIN_VPROG            3000
 #define HV_LAMBDA_DAC_ZERO_OUTPUT      0x0000    // This will set the DAC output to Zero (program of Zero as well)
 
