@@ -337,10 +337,15 @@ extern LambdaControlData global_data_A37342;
 #ifdef __LCS1202
 #define VPROG_SCALE_FACTOR 2.66667
 #define VMON_SCALE_FACTOR  .31250
-#elseif __LCS1202_25KV
+#endif
+
+#ifdef __LCS1202_25KV
 #define VPROG_SCALE_FACTOR 2.13125
 #define VMON_SCALE_FACTOR  .3906
-#else
+#endif
+
+
+#ifdef  __LCS802
 #define VPROG_SCALE_FACTOR 2.96296
 #define VMON_SCALE_FACTOR  .28125
 #endif
