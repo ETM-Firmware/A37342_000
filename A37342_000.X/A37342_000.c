@@ -393,7 +393,7 @@ void UpdateFaultsAndStatusBits(void) {
     _LOGGED_LAMBDA_READBACK_HV_OFF = 0;
   }
 
-#ifdef __LCS1202
+#ifndef __LCS802
   ETMDigitalUpdateInput(&global_data_A37342.digital_phase_loss,  PIN_LAMBDA_PHASE_LOSS_FLT);
   if (ETMDigitalFilteredOutput(&global_data_A37342.digital_phase_loss) == ILL_LAMBDA_FAULT_ACTIVE) {
     _LOGGED_LAMBDA_PHASE_LOSS = 1;
