@@ -14,7 +14,8 @@
 #define FCY_CLK_MHZ 10
 
 //#define __LCS1202
-#define __LCS1202_25KV
+//#define __LCS1202_25KV
+#define __LCS1202_20KV_FOR_MAGNETX
 //#define __LCS802
 
 // DPARKER move timer 5 to timer 3
@@ -346,6 +347,13 @@ extern LambdaControlData global_data_A37342;
 #define VMON_SCALE_FACTOR  .3906
 #define HV_LAMBDA_MAX_VPROG            22100
 #endif
+
+#ifdef __LCS1202_20KV_FOR_MAGNETX
+#define VPROG_SCALE_FACTOR 2.66667
+#define VMON_SCALE_FACTOR  .31250
+#define HV_LAMBDA_MAX_VPROG            20500
+#endif
+
 
 
 #ifdef  __LCS802
