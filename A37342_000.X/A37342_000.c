@@ -392,8 +392,8 @@ void UpdateFaultsAndStatusBits(void) {
   } else {
     _LOGGED_LAMBDA_READBACK_HV_OFF = 0;
   }
-
-#ifndef __LCS802
+  
+#ifdef __HVPS_LC1202
   ETMDigitalUpdateInput(&global_data_A37342.digital_phase_loss,  PIN_LAMBDA_PHASE_LOSS_FLT);
   if (ETMDigitalFilteredOutput(&global_data_A37342.digital_phase_loss) == ILL_LAMBDA_FAULT_ACTIVE) {
     _LOGGED_LAMBDA_PHASE_LOSS = 1;
@@ -500,8 +500,9 @@ void InitializeA37342(void) {
 
   // Initialize the Can module
   ETMCanSlaveInitialize(CAN_PORT_1, FCY_CLK, ETM_CAN_ADDR_HV_LAMBDA_BOARD, _PIN_RG13, 4, _PIN_RA7, _PIN_RG12);
-  ETMCanSlaveLoadConfiguration(37342, 495, FIRMWARE_AGILE_REV, FIRMWARE_BRANCH, FIRMWARE_BRANCH_REV);
 
+  ETMCanSlaveLoadConfiguration(37342, SOFTWARE_DASH_NUMBER, FIRMWARE_AGILE_REV, FIRMWARE_BRANCH, FIRMWARE_BRANCH_REV);
+  
 
   if (do_fast_startup) {
     EnableHVLambda();

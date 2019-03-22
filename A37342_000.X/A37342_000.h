@@ -7,16 +7,12 @@
 #include <libpic30.h>
 #include "ETM.h"
 #include "P1395_CAN_SLAVE.h"
-
+#include "A37342_000_CONFIG.h"
 
 
 #define FCY_CLK     10000000
 #define FCY_CLK_MHZ 10
 
-//#define __LCS1202
-//#define __LCS1202_25KV
-#define __LCS1202_20KV_FOR_MAGNETX
-//#define __LCS802
 
 // DPARKER move timer 5 to timer 3
 
@@ -331,38 +327,6 @@ extern LambdaControlData global_data_A37342;
 #define _STATUS_LAMBDA_HIGH_ENERGY                      _NOT_LOGGED_1
 
 
-
-// MOVE TO SETTINGS FILE
-
-
-
-#ifdef __LCS1202
-#define VPROG_SCALE_FACTOR 2.66667
-#define VMON_SCALE_FACTOR  .31250
-#define HV_LAMBDA_MAX_VPROG            20000
-#endif
-
-#ifdef __LCS1202_25KV
-#define VPROG_SCALE_FACTOR 2.13125
-#define VMON_SCALE_FACTOR  .3906
-#define HV_LAMBDA_MAX_VPROG            22100
-#endif
-
-#ifdef __LCS1202_20KV_FOR_MAGNETX
-#define VPROG_SCALE_FACTOR 2.66667
-#define VMON_SCALE_FACTOR  .31250
-#define HV_LAMBDA_MAX_VPROG            20500
-#endif
-
-
-
-#ifdef  __LCS802
-#define VPROG_SCALE_FACTOR 2.96296
-#define VMON_SCALE_FACTOR  .28125
-#define HV_LAMBDA_MAX_VPROG            19000
-#endif
-
-
 #define HV_LAMBDA_MIN_VPROG            3000
 #define HV_LAMBDA_DAC_ZERO_OUTPUT      0x0000    // This will set the DAC output to Zero (program of Zero as well)
 
@@ -371,14 +335,6 @@ extern LambdaControlData global_data_A37342;
 #define LAMBDA_HEATSINK_OVER_TEMP      57000     // 57 Deg C
 #define TRIP_COUNTER_100mS             10
 #define TRIP_COUNTER_1Sec              100
-
-
-
-
-#define LAMBDA_HOLDOFF_TIME_US         150        // 150 uS
-#define LAMBDA_MAX_CHARGE_TIME_US      2300       // 2.3mS
-#define LAMBDA_STARTUP_CHARGE_TIME_US  50000      // 50ms
-
 
 #define HV_ON_LAMBDA_SET_POINT_REFRESH_RATE_WHEN_NOT_PULSING            200             // 2 seconds
 
