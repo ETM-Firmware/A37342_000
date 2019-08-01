@@ -14,25 +14,27 @@
 #define FCY_CLK_MHZ 10
 
 
-// DPARKER move timer 5 to timer 3
+extern ETMCanBoardData               slave_board_data;
+
+
 
 /*
   Hardware Module Resource Usage
 
   CAN1   - Used/Configured by ETM CAN 
-  Timer4 - Used/Configured by ETM CAN - Used to Time sending of messages (status update / logging data and such) 
-  Timer5 - Used/Configured by ETM CAN - Used for detecting error on can bus
+  Timer5 - Used/Configured by ETM CAN - Used for ETM Tick
 
   SPI1   - Used/Configured by LTC265X Module
   I2C    - Used/Configured by EEPROM Module
 
 
   Timer1 - Used to time to Lambda Charge Time and the Lambda Inhibit Time and the startup timer
+  Timer2 - Used to measure the PRF
   Timer3 - Used for 10msTicToc
 
   ADC Module - See Below For Specifics
 
-  Timer2 - Used to measure the PRF
+
 
 */
 
@@ -211,7 +213,6 @@
 */
     
 #define T1CON_VALUE                    (T1_OFF & T1_IDLE_CON & T1_GATE_OFF & T1_PS_1_8 & T1_SOURCE_INT)
-#define TMR1_DELAY_HOLDOFF_US          LAMBDA_HOLDOFF_TIME_US
 #define TMR1_LAMBDA_CHARGE_TIME_US     LAMBDA_MAX_CHARGE_TIME_US
 #define TMR1_DELAY_HOLDOFF             (FCY_CLK_MHZ*TMR1_DELAY_HOLDOFF_US/8)    
 #define TMR1_LAMBDA_CHARGE_PERIOD      (FCY_CLK_MHZ*TMR1_LAMBDA_CHARGE_TIME_US/8)
@@ -233,41 +234,39 @@
 
 
 typedef struct {
-  AnalogInput analog_input_lambda_vmon;               // 1V per LSB
-  AnalogInput analog_input_lambda_vpeak;              // 1V per LSB
-  AnalogInput analog_input_lambda_imon;               // 100uA per LSB
-  AnalogInput analog_input_lambda_heat_sink_temp;     // 1 mili Deg C per LSB
+  TYPE_PUBLIC_ANALOG_INPUT analog_input_lambda_vmon;               // 1V per LSB
+  TYPE_PUBLIC_ANALOG_INPUT analog_input_lambda_vpeak;              // 1V per LSB
+  TYPE_PUBLIC_ANALOG_INPUT analog_input_lambda_imon;               // 100uA per LSB
+  TYPE_PUBLIC_ANALOG_INPUT analog_input_lambda_heat_sink_temp;     // 1 mili Deg C per LSB
 
-  AnalogInput analog_input_5v_mon;                    // 1mV per LSB
-  AnalogInput analog_input_15v_mon;                   // 1mV per LSB
-  AnalogInput analog_input_neg_15v_mon;               // 1mV per LSB
-  AnalogInput analog_input_pic_adc_test_dac;          // 62.5uV per LSB
+  TYPE_PUBLIC_ANALOG_INPUT analog_input_5v_mon;                    // 1mV per LSB
+  TYPE_PUBLIC_ANALOG_INPUT analog_input_15v_mon;                   // 1mV per LSB
+  TYPE_PUBLIC_ANALOG_INPUT analog_input_neg_15v_mon;               // 1mV per LSB
+  TYPE_PUBLIC_ANALOG_INPUT analog_input_pic_adc_test_dac;          // 62.5uV per LSB
 
 
-  AnalogOutput analog_output_high_energy_vprog;       // 1V per LSB
-  AnalogOutput analog_output_low_energy_vprog;        // 1V per LSB
+  TYPE_PUBLIC_ANALOG_OUTPUT analog_output_high_energy_vprog;       // 1V per LSB
+  TYPE_PUBLIC_ANALOG_OUTPUT analog_output_low_energy_vprog;        // 1V per LSB
 
-  AnalogOutput analog_output_spare;                   // 1mV per LSB
-  AnalogOutput analog_output_adc_test;                // 62.5uV per LSB
+  TYPE_PUBLIC_ANALOG_OUTPUT analog_output_spare;                   // 1mV per LSB
+  TYPE_PUBLIC_ANALOG_OUTPUT analog_output_adc_test;                // 62.5uV per LSB
 
-  unsigned int accumulator_counter;
-  unsigned int adc_ignore_current_sample;
   unsigned int eoc_not_reached_count;
   unsigned int control_state;
-  unsigned int led_divider;
+
+  
   unsigned int run_post_pulse_process;
+
   unsigned int no_pulse_counter;
   unsigned int pulse_counter;
-  unsigned int post_pulse_did_not_run_counter;
-  unsigned int charge_period_error_counter;
-  unsigned int power_up_timer;
-  //unsigned int fault_active;
+
+  unsigned int pulse_level;
+  
+  
   unsigned int fault_wait_time;
   unsigned int pulse_id;
-  unsigned int previous_pulse_id;
-  unsigned int false_trigger_total_count;
-  unsigned int false_trigger_counter;
-  unsigned int false_trigger_timer;
+  //  unsigned int previous_pulse_id;
+
 
   TYPE_DIGITAL_INPUT digital_sum_flt;
   TYPE_DIGITAL_INPUT digital_hv_off;
@@ -278,20 +277,14 @@ typedef struct {
   TYPE_DIGITAL_INPUT digital_load_flt;
 
 
-  //unsigned int sum_flt_counter;
-  //unsigned int hv_off_counter;
-  //unsigned int phase_loss_counter;
-  //unsigned int lambda_not_powered_counter;
-
   unsigned int vmon_at_eoc_period;
-  unsigned int vmon_pre_pulse;
-  unsigned int vprog_pre_pulse;
+  unsigned int vprog_at_eoc_period;
   unsigned int store_lambda_voltage;
 
   unsigned int hv_lambda_power_wait;
   unsigned int lambda_reached_eoc;
 
-  unsigned int prf_ok;
+  //unsigned int prf_ok;
 
 } LambdaControlData;
 
