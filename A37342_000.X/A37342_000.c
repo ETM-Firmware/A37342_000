@@ -38,6 +38,8 @@ void UpdateFaultsAndStatusBits(void);
 void InitializeA37342(void);
 void DoPostPulseProcess(void);
 unsigned int CheckAtEOC(void);
+void UpdateSystemConfiguration(unsigned int system_configuartion);
+void FlashLeds(void);
 
 int main(void) {
   global_data_A37342.control_state = STATE_STARTUP;
@@ -62,9 +64,12 @@ void DoStateMachine(void) {
   case STATE_WAITING_FOR_CONFIG:
     DisableHVLambda();
     _CONTROL_NOT_READY = 1;
+    global_data_A37342.startup_counter = 0;
     while (global_data_A37342.control_state == STATE_WAITING_FOR_CONFIG) {
       DoA37342();
-      if (_CONTROL_NOT_CONFIGURED == 0) {
+      FlashLeds();
+      if ((_CONTROL_NOT_CONFIGURED == 0) && (global_data_A37342.startup_counter > 200))  {
+	UpdateSystemConfiguration(ETMCanSlaveGetSetting(SYSTEM_CONFIGURATION_SELECT));
 	global_data_A37342.control_state = STATE_WAITING_FOR_POWER;
       }
     }
@@ -187,7 +192,10 @@ void DoPostPulseProcess(void) {
 
 
 void DoA37342(void) {
+  static unsigned long ten_millisecond_holding_var;
   unsigned int pulse_count_and_level;
+  unsigned char discrete_cmd;
+  static unsigned int discrete_cmd_counter;
   
   ETMCanSlaveDoCan();
   pulse_count_and_level = ETMCanSlaveGetPulseLevelAndCount();
@@ -229,12 +237,35 @@ void DoA37342(void) {
     DoPostPulseProcess();
     post_pulse_process_count++;
   }
-  
-  if (_T3IF) {
-    // Timer has expired so execute the scheduled code (should be once every 10ms unless the configuration file is changes
-    _T3IF = 0;
+
+
+  if (ETMTickRunOnceEveryNMilliseconds(10, &ten_millisecond_holding_var)) {
     
     global_data_A37342.hv_lambda_power_wait++;
+    global_data_A37342.startup_counter++;
+
+
+    // DPARKER TESTING DISCRETE CMD
+    discrete_cmd = ETMCanSlaveGetDiscreteCMD();
+    switch (discrete_cmd) {
+
+    case DISCRETE_CMD_AFC_SELECT_MANUAL_MODE:
+      ETMCanSlaveSetDebugRegister(0, 44);
+      discrete_cmd_counter++;
+      break;
+
+    case DISCRETE_CMD_AFC_SELECT_AUTOMATIC_MODE:
+      ETMCanSlaveSetDebugRegister(0, 77);
+      discrete_cmd_counter++;
+      break;
+    }
+
+    ETMCanSlaveSetDebugRegister(1, discrete_cmd_counter);
+
+    ETMCanSlaveSetDebugRegister(2, (ETMCanSlaveGetPulseLevelAndCount()>>8));
+    ETMCanSlaveSetDebugRegister(3, (ETMCanSlaveGetPulseLevelAndCount() & 0x00FF));
+
+
     
     // Update debugging information
     //ETMCanSlaveSetDebugRegister(0, global_data_A37342.analog_input_lambda_vmon.reading_scaled_and_calibrated);
@@ -252,17 +283,23 @@ void DoA37342(void) {
     // ETMCanSlaveSetDebugRegister(0xE, RESERVED);
     // ETMCanSlaveSetDebugRegister(0xF, RESERVED);
 
+    
+    
 
     // Update all the logging data
     ETMCanSlaveSetLogDataRegister(0, ETMAnalogInputGetReading(&global_data_A37342.analog_input_lambda_vpeak));
-    ETMCanSlaveSetLogDataRegister(1, ETMAnalogOutputGetSetPoint(&global_data_A37342.analog_output_low_energy_vprog));
-    ETMCanSlaveSetLogDataRegister(2, ETMAnalogOutputGetSetPoint(&global_data_A37342.analog_output_high_energy_vprog));
-    //ETMCanSlaveSetLogDataRegister(3, global_data_A37342.false_trigger_total_count);
-    ETMCanSlaveSetLogDataRegister(4, ETMAnalogInputGetReading(&global_data_A37342.analog_input_lambda_heat_sink_temp));
-    ETMCanSlaveSetLogDataRegister(5, ETMAnalogInputGetReading(&global_data_A37342.analog_input_lambda_imon));
-    ETMCanSlaveSetLogDataRegister(6, ETMAnalogInputGetReading(&global_data_A37342.analog_input_lambda_vmon));
+    ETMCanSlaveSetLogDataRegister(1, ETMAnalogInputGetReading(&global_data_A37342.analog_input_lambda_imon));
+    ETMCanSlaveSetLogDataRegister(2, ETMAnalogInputGetReading(&global_data_A37342.analog_input_lambda_vmon));
+    ETMCanSlaveSetLogDataRegister(3, ETMAnalogInputGetReading(&global_data_A37342.analog_input_lambda_heat_sink_temp));
+    ETMCanSlaveSetLogDataRegister(4, ETMAnalogOutputGetSetPoint(&global_data_A37342.analog_output_low_energy_vprog));
+    ETMCanSlaveSetLogDataRegister(5, ETMAnalogOutputGetSetPoint(&global_data_A37342.analog_output_high_energy_vprog));
     ETMCanSlaveSetLogDataRegister(7, global_data_A37342.eoc_not_reached_count);
+    ETMCanSlaveSetLogDataRegister(8, ETMCanSlaveGetSetting(HVPS_SET_POINT_DOSE_0));
+    ETMCanSlaveSetLogDataRegister(9, ETMCanSlaveGetSetting(HVPS_SET_POINT_DOSE_1));
+    ETMCanSlaveSetLogDataRegister(10, ETMCanSlaveGetSetting(HVPS_SET_POINT_DOSE_2));
+    ETMCanSlaveSetLogDataRegister(11, ETMCanSlaveGetSetting(HVPS_SET_POINT_DOSE_3));
     
+
     if (global_data_A37342.control_state == STATE_FAULT_WAIT) {
       global_data_A37342.fault_wait_time++;
       if (global_data_A37342.fault_wait_time >= TIME_WAIT_FOR_LAMBDA_TO_SET_FAULT_OUTPUTS) {
@@ -386,14 +423,10 @@ void UpdateFaultsAndStatusBits(void) {
   } else {
     _LOGGED_LAMBDA_LOAD_FLT = 0;
   }
-
 }
     
 
-
-
 void InitializeA37342(void) {
-  unsigned int startup_counter;
 
   // Initialize the status register and load the inhibit and fault masks
   _CONTROL_REGISTER = 0;
@@ -429,23 +462,25 @@ void InitializeA37342(void) {
   T1CON = T1CON_VALUE;
   _T1IP = 6;
 
+  // Initialize ETM Tick using TMR5
+  ETMTickInitialize(FCY_CLK, ETM_TICK_USE_TIMER_5);
+  
 
-  // Initialize TMR2
-  T2CON = T2CON_VALUE;
+  /*
+  ETMEEPromUseI2C();
+  ETMEEPromConfigureI2CDevice(EEPROM_SIZE_64K_BITS,
+			      FCY_CLK,
+			      ETM_I2C_400K_BAUD,
+			      EEPROM_I2C_ADDRESS_0,
+			      I2C_PORT);
+  */
 
-  // Initialize TMR3
-  PR3   = PR3_VALUE_10_MILLISECONDS;
-  TMR3  = 0;
-  _T3IF = 0;
-  T3CON = T3CON_VALUE;
-
-  // DPARKER - EEPROM is configured by the can module
-
-    
+  ETMEEPromUseInternal();
+  
   // Initialize the Can module
   ETMCanSlaveInitialize(CAN_PORT_1, FCY_CLK, ETM_CAN_ADDR_HV_LAMBDA_BOARD,
 			_PIN_RG13, 4,
-			_PIN_RA7, _PIN_RG12, ETM_EEPROM_I2C_SELECTED);
+			_PIN_RA7, _PIN_RG12);
 
   ETMCanSlaveLoadConfiguration(37342, SOFTWARE_DASH_NUMBER, FIRMWARE_AGILE_REV, FIRMWARE_BRANCH, FIRMWARE_BRANCH_REV);
   
@@ -453,27 +488,88 @@ void InitializeA37342(void) {
   // Initialize LTC DAC
   SetupLTC265X(&U1_LTC2654, ETM_SPI_PORT_2, FCY_CLK, LTC265X_SPI_2_5_M_BIT, _PIN_RG15, _PIN_RC1);
   DisableHVLambda();
-  
-  // Initialize Digital Input Filters
-  ETMDigitalInitializeInput(&global_data_A37342.digital_hv_not_powered , ILL_LAMBDA_NOT_POWERED, 30);
-  ETMDigitalInitializeInput(&global_data_A37342.digital_sum_flt        , !ILL_LAMBDA_FAULT_ACTIVE, 30);
-  ETMDigitalInitializeInput(&global_data_A37342.digital_hv_off         , ILL_LAMBDA_HV_ON, 30);
-  ETMDigitalInitializeInput(&global_data_A37342.digital_phase_loss     , !ILL_LAMBDA_FAULT_ACTIVE, 30);
-  ETMDigitalInitializeInput(&global_data_A37342.digital_over_temp      , !ILL_LAMBDA_FAULT_ACTIVE, 30);
-  ETMDigitalInitializeInput(&global_data_A37342.digital_interlock      , !ILL_LAMBDA_FAULT_ACTIVE, 30);
-  ETMDigitalInitializeInput(&global_data_A37342.digital_load_flt       , !ILL_LAMBDA_FAULT_ACTIVE, 30);
+
+   // Initialize Digital Input Filters
+  ETMDigitalInitializeInput(&global_data_A37342.digital_hv_not_powered , ILL_LAMBDA_NOT_POWERED, 10);
+  ETMDigitalInitializeInput(&global_data_A37342.digital_sum_flt        , !ILL_LAMBDA_FAULT_ACTIVE, 10);
+  ETMDigitalInitializeInput(&global_data_A37342.digital_hv_off         , ILL_LAMBDA_HV_ON, 10);
+  ETMDigitalInitializeInput(&global_data_A37342.digital_phase_loss     , !ILL_LAMBDA_FAULT_ACTIVE, 10);
+  ETMDigitalInitializeInput(&global_data_A37342.digital_over_temp      , !ILL_LAMBDA_FAULT_ACTIVE, 10);
+  ETMDigitalInitializeInput(&global_data_A37342.digital_interlock      , !ILL_LAMBDA_FAULT_ACTIVE, 10);
+  ETMDigitalInitializeInput(&global_data_A37342.digital_load_flt       , !ILL_LAMBDA_FAULT_ACTIVE, 10);
 
 
-  // Initialize the Analog input data structures
+
+  //Initialize the internal ADC for Startup Power Checks
+  // ---- Configure the dsPIC ADC Module ------------ //
+  ADCON1 = ADCON1_SETTING;             // Configure the high speed ADC module based on H file parameters
+  ADCON2 = ADCON2_SETTING;             // Configure the high speed ADC module based on H file parameters
+  ADPCFG = ADPCFG_SETTING;             // Set which pins are analog and which are digital I/O
+  ADCHS  = ADCHS_SETTING;              // Configure the high speed ADC module based on H file parameters
+
+  ADCON3 = ADCON3_SETTING;             // Configure the high speed ADC module based on H file parameters
+  ADCSSL = ADCSSL_SETTING;
+
+  _ADIF = 0;
+  _ADIE = 1;
+  _ADON = 1;
+
+  PIN_LAMBDA_VOLTAGE_SELECT = OLL_LAMBDA_VOLTAGE_SELECT_LOW_ENERGY;  
+}
+
+void UpdateSystemConfiguration(unsigned int system_configuartion) {
+  switch (system_configuartion) {
+
+  case SYSTEM_CONFIGURATION_6_4_R:
+    // This used 20KV Lambda
+    global_data_A37342.vprog_scale_factor = MACRO_DEC_TO_SCALE_FACTOR_16(2.66667);
+    global_data_A37342.vmon_scale_factor = MACRO_DEC_TO_SCALE_FACTOR_16(.31250);
+    global_data_A37342.hvps_max_program = 20000;
+    global_data_A37342.software_config_number = 495;
+    break;
+
+  case SYSTEM_CONFIGURATION_6_4_M:
+    // This uses 25KV Lambda
+    global_data_A37342.vprog_scale_factor = MACRO_DEC_TO_SCALE_FACTOR_16(2.13125);
+    global_data_A37342.vmon_scale_factor = MACRO_DEC_TO_SCALE_FACTOR_16(.3906);
+    global_data_A37342.hvps_max_program = 22100;
+    global_data_A37342.software_config_number = 100;
+    break;
+
+  case SYSTEM_CONFIGURATION_6_4_S:
+    // This uses 20KV Lambda
+    global_data_A37342.vprog_scale_factor = MACRO_DEC_TO_SCALE_FACTOR_16(2.66667);
+    global_data_A37342.vmon_scale_factor = MACRO_DEC_TO_SCALE_FACTOR_16(.31250);
+    global_data_A37342.hvps_max_program = 20000;
+    global_data_A37342.software_config_number = 495;
+    break;
+
+  case SYSTEM_CONFIGURATION_2_5_R:
+    // This uses 18KV Lambda
+    global_data_A37342.vprog_scale_factor = MACRO_DEC_TO_SCALE_FACTOR_16(2.96296);
+    global_data_A37342.vmon_scale_factor = MACRO_DEC_TO_SCALE_FACTOR_16(.28125);
+    global_data_A37342.hvps_max_program = 18000;
+    global_data_A37342.software_config_number = 0;
+    break;
+
+  default:
+    // Assume 25KV Lambda so that output stays low
+    global_data_A37342.vprog_scale_factor = MACRO_DEC_TO_SCALE_FACTOR_16(2.13125);
+    global_data_A37342.vmon_scale_factor = MACRO_DEC_TO_SCALE_FACTOR_16(.3906);
+    global_data_A37342.hvps_max_program = 22100;
+    global_data_A37342.software_config_number = 100;
+
+
+  // Initialize the Analog input/output data structures
   
   ETMAnalogInputInitialize(&global_data_A37342.analog_input_lambda_vmon,
-			   MACRO_DEC_TO_SCALE_FACTOR_16(VMON_SCALE_FACTOR),
+			   global_data_A37342.vmon_scale_factor,
 			   OFFSET_ZERO,	   
 			   ETM_ANALOG_AVERAGE_64_SAMPLES);
 
   
   ETMAnalogInputInitialize(&global_data_A37342.analog_input_lambda_vpeak,
-			   MACRO_DEC_TO_SCALE_FACTOR_16(VMON_SCALE_FACTOR),
+			   global_data_A37342.vmon_scale_factor,
 			   OFFSET_ZERO,
 			   ETM_ANALOG_AVERAGE_64_SAMPLES);
   
@@ -487,13 +583,17 @@ void InitializeA37342(void) {
 			   10000,
 			   ETM_ANALOG_AVERAGE_64_SAMPLES);
 
-
-
-
   ETMAnalogOutputInitialize(&global_data_A37342.analog_output_low_energy_vprog,
-			    MACRO_DEC_TO_SCALE_FACTOR_16(VPROG_SCALE_FACTOR),
+			    global_data_A37342.vprog_scale_factor,
 			    OFFSET_ZERO,
-			    HV_LAMBDA_MAX_VPROG,
+			    global_data_A37342.hvps_max_program,
+			    HV_LAMBDA_MIN_VPROG,
+			    HV_LAMBDA_DAC_ZERO_OUTPUT);
+
+  ETMAnalogOutputInitialize(&global_data_A37342.analog_output_high_energy_vprog,
+			    global_data_A37342.vprog_scale_factor,
+			    OFFSET_ZERO,
+			    global_data_A37342.hvps_max_program,
 			    HV_LAMBDA_MIN_VPROG,
 			    HV_LAMBDA_DAC_ZERO_OUTPUT);
 
@@ -512,134 +612,6 @@ void InitializeA37342(void) {
 			    0);
 
   
-  /*
-
-  ETMAnalogInitializeInput(&global_data_A37342.analog_input_lambda_vmon,
-    MACRO_DEC_TO_SCALE_FACTOR_16(VMON_SCALE_FACTOR),
-    OFFSET_ZERO,
-    ANALOG_INPUT_NO_CALIBRATION,
-    NO_OVER_TRIP,
-    NO_UNDER_TRIP,
-    NO_TRIP_SCALE,
-    NO_FLOOR,
-    NO_COUNTER,
-    NO_COUNTER
-    );
-
-  ETMAnalogInitializeInput(&global_data_A37342.analog_input_lambda_vpeak,
-    MACRO_DEC_TO_SCALE_FACTOR_16(VMON_SCALE_FACTOR),
-    OFFSET_ZERO,
-    ANALOG_INPUT_NO_CALIBRATION,
-    NO_OVER_TRIP,
-    NO_UNDER_TRIP,
-    NO_TRIP_SCALE,
-    NO_FLOOR,
-    NO_COUNTER,
-    NO_COUNTER);
-  
-  ETMAnalogInitializeInput(&global_data_A37342.analog_input_lambda_imon,
-    MACRO_DEC_TO_SCALE_FACTOR_16(.40179),
-    OFFSET_ZERO,
-    ANALOG_INPUT_NO_CALIBRATION,
-    NO_OVER_TRIP,
-    NO_UNDER_TRIP,
-    NO_TRIP_SCALE,
-    NO_FLOOR,
-    NO_COUNTER,
-    NO_COUNTER);
-
-  ETMAnalogInitializeInput(&global_data_A37342.analog_input_lambda_heat_sink_temp,
-    MACRO_DEC_TO_SCALE_FACTOR_16(.78125),
-    10000,
-    ANALOG_INPUT_NO_CALIBRATION,
-    LAMBDA_HEATSINK_OVER_TEMP,
-    NO_UNDER_TRIP,
-    NO_TRIP_SCALE,
-    NO_FLOOR,
-    TRIP_COUNTER_1Sec,
-    TRIP_COUNTER_1Sec);
-  
-  ETMAnalogInitializeInput(&global_data_A37342.analog_input_5v_mon,
-    MACRO_DEC_TO_SCALE_FACTOR_16(.12500),
-    OFFSET_ZERO,
-    ANALOG_INPUT_NO_CALIBRATION,
-    PWR_5V_OVER_FLT,
-    PWR_5V_UNDER_FLT,
-    NO_TRIP_SCALE,
-    NO_FLOOR,
-    NO_COUNTER,
-    NO_COUNTER);
-
-  ETMAnalogInitializeInput(&global_data_A37342.analog_input_15v_mon,
-    MACRO_DEC_TO_SCALE_FACTOR_16(.25063),
-    OFFSET_ZERO,
-    ANALOG_INPUT_NO_CALIBRATION,
-    PWR_15V_OVER_FLT,
-    PWR_15V_UNDER_FLT,
-    NO_TRIP_SCALE,
-    NO_FLOOR,
-    NO_COUNTER,
-    NO_COUNTER);
-  
-  ETMAnalogInitializeInput(&global_data_A37342.analog_input_neg_15v_mon,
-    MACRO_DEC_TO_SCALE_FACTOR_16(.06250),
-    OFFSET_ZERO,
-    ANALOG_INPUT_NO_CALIBRATION,
-    PWR_NEG_15V_OVER_FLT,
-    PWR_NEG_15V_UNDER_FLT,
-    NO_TRIP_SCALE,
-    NO_FLOOR,
-    NO_COUNTER,
-    NO_COUNTER);
-
-  ETMAnalogInitializeInput(&global_data_A37342.analog_input_pic_adc_test_dac,
-    MACRO_DEC_TO_SCALE_FACTOR_16(1),
-    OFFSET_ZERO,
-    ANALOG_INPUT_NO_CALIBRATION,
-    ADC_DAC_TEST_OVER_FLT,
-    ADC_DAC_TEST_UNDER_FLT,
-    NO_TRIP_SCALE,
-    NO_FLOOR,
-    NO_COUNTER,
-    NO_COUNTER);
-
-
-    // Initialize the Analog Output Data Structures
-  ETMAnalogInitializeOutput(&global_data_A37342.analog_output_high_energy_vprog,
-    MACRO_DEC_TO_SCALE_FACTOR_16(VPROG_SCALE_FACTOR),
-    OFFSET_ZERO,
-    ANALOG_OUTPUT_NO_CALIBRATION,
-    HV_LAMBDA_MAX_VPROG,
-    HV_LAMBDA_MIN_VPROG,
-    HV_LAMBDA_DAC_ZERO_OUTPUT);
-  
-  ETMAnalogInitializeOutput(&global_data_A37342.analog_output_low_energy_vprog,
-			    MACRO_DEC_TO_SCALE_FACTOR_16(VPROG_SCALE_FACTOR),
-			    OFFSET_ZERO,
-			    ANALOG_OUTPUT_NO_CALIBRATION,
-			    HV_LAMBDA_MAX_VPROG,
-			    HV_LAMBDA_MIN_VPROG,
-			    HV_LAMBDA_DAC_ZERO_OUTPUT);
-
-  ETMAnalogInitializeOutput(&global_data_A37342.analog_output_spare,
-			    MACRO_DEC_TO_SCALE_FACTOR_16(5.33333),
-			    OFFSET_ZERO,
-			    ANALOG_OUTPUT_NO_CALIBRATION,
-			    10000,
-			    0,
-			    0);
-
-  ETMAnalogInitializeOutput(&global_data_A37342.analog_output_adc_test,
-			    MACRO_DEC_TO_SCALE_FACTOR_16(1),
-			    OFFSET_ZERO,
-			    ANALOG_OUTPUT_NO_CALIBRATION,
-			    0xFFFF,
-			    0,
-			    0);
-
-  */
-
-  
   ETMAnalogOutputSetPoint(&global_data_A37342.analog_output_spare, 3000);
   ETMAnalogOutputSetPoint(&global_data_A37342.analog_output_adc_test, ADC_DAC_TEST_VALUE);
 
@@ -653,60 +625,38 @@ void InitializeA37342(void) {
 			  LTC265X_WRITE_AND_UPDATE_DAC_B,
 			  ETMAnalogOutputGetDACValue(&global_data_A37342.analog_output_adc_test));
 
-  //Initialize the internal ADC for Startup Power Checks
-  // ---- Configure the dsPIC ADC Module ------------ //
-  ADCON1 = ADCON1_SETTING;             // Configure the high speed ADC module based on H file parameters
-  ADCON2 = ADCON2_SETTING;             // Configure the high speed ADC module based on H file parameters
-  ADPCFG = ADPCFG_SETTING;             // Set which pins are analog and which are digital I/O
-  ADCHS  = ADCHS_SETTING;              // Configure the high speed ADC module based on H file parameters
-
-  ADCON3 = ADCON3_SETTING;             // Configure the high speed ADC module based on H file parameters
-  ADCSSL = ADCSSL_SETTING;
-
-  _ADIF = 0;
-  _ADIE = 1;
-  _ADON = 1;
-
-  // Flash LEDs at Startup
-  startup_counter = 0;
-  while (startup_counter <= 400) {  // 4 Seconds total
-    ETMCanSlaveDoCan();
-    if (_T3IF) {
-      _T3IF =0;
-      startup_counter++;
-    } 
-    switch (((startup_counter >> 4) & 0b11)) {
-      
-    case 0:
-      _LATA7 = !OLL_LED_ON;
-      _LATG12 = !OLL_LED_ON;
-      _LATG13 = !OLL_LED_ON;
-      break;
-      
-    case 1:
-      _LATA7 = OLL_LED_ON;
-      _LATG12 = !OLL_LED_ON;
-      _LATG13 = !OLL_LED_ON;
-      break;
-      
-    case 2:
-      _LATA7 = OLL_LED_ON;
-      _LATG12 = OLL_LED_ON;
-      _LATG13 = !OLL_LED_ON;
-      break;
-      
-    case 3:
-      _LATA7 = OLL_LED_ON;
-      _LATG12 = OLL_LED_ON;
-      _LATG13 = OLL_LED_ON;
-      break;
-    }
   }
-  
-  PIN_LAMBDA_VOLTAGE_SELECT = OLL_LAMBDA_VOLTAGE_SELECT_LOW_ENERGY;  
 }
 
 
+void FlashLeds(void) {
+  switch (((global_data_A37342.startup_counter >> 4) & 0b11)) {
+    
+  case 0:
+    _LATA7 = !OLL_LED_ON;
+    _LATG12 = !OLL_LED_ON;
+    _LATG13 = !OLL_LED_ON;
+    break;
+    
+  case 1:
+    _LATA7 = OLL_LED_ON;
+    _LATG12 = !OLL_LED_ON;
+    _LATG13 = !OLL_LED_ON;
+    break;
+    
+  case 2:
+    _LATA7 = OLL_LED_ON;
+    _LATG12 = OLL_LED_ON;
+    _LATG13 = !OLL_LED_ON;
+    break;
+    
+  case 3:
+    _LATA7 = OLL_LED_ON;
+    _LATG12 = OLL_LED_ON;
+    _LATG13 = OLL_LED_ON;
+    break;
+  }
+}
 
 
 void EnableHVLambda(void) {

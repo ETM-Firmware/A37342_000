@@ -10,7 +10,7 @@
 // Public Functions
 void ETMCanSlaveInitialize(unsigned int requested_can_port, unsigned long fcy, unsigned int etm_can_address,
 			   unsigned long can_operation_led, unsigned int can_interrupt_priority,
-			   unsigned long flash_led, unsigned long not_ready_led, unsigned int analog_calibration_eeprom_location);
+			   unsigned long flash_led, unsigned long not_ready_led);
 /*
   This is called once when the processor starts up to initialize the can bus and all of the can variables
 */
@@ -33,6 +33,11 @@ void ETMCanSlaveDoCan(void);
   3) Send out regularly schedule communication (On slaves this is status update and logging data)
 */
 
+unsigned char ETMCanSlaveGetDiscreteCMD(void);
+/*
+  Returns the next discrete command id to be executed.
+  If there are no commands, will return 0.
+*/
 
 void ETMCanSlaveLogPulseData(unsigned int word3, unsigned int word2, unsigned int word1, unsigned int word0);
 /*
@@ -153,6 +158,9 @@ unsigned int ETMCanSlaveGetSetting(unsigned char setting_select);
 #define GUN_DRIVER_HEATER_VOLTAGE                    23
 
 #define AFC_MANUAL_TARGET_POSTION                    24
+#define SYSTEM_CONFIGURATION_SELECT                  25
+
+
 
 
 

@@ -29,8 +29,7 @@ extern ETMCanBoardData               slave_board_data;
 
 
   Timer1 - Used to time to Lambda Charge Time and the Lambda Inhibit Time and the startup timer
-  Timer2 - Used to measure the PRF
-  Timer3 - Used for 10msTicToc
+  Timer4 - Used for ETMTick
 
   ADC Module - See Below For Specifics
 
@@ -204,7 +203,7 @@ extern ETMCanBoardData               slave_board_data;
 #define ADCHS_SETTING   (ADC_CH0_POS_SAMPLEA_AN2 & ADC_CH0_NEG_SAMPLEA_VREFN & ADC_CH0_POS_SAMPLEB_AN2 & ADC_CH0_NEG_SAMPLEB_VREFN)
 #define ADPCFG_SETTING  (ENABLE_AN2_ANA & ENABLE_AN3_ANA & ENABLE_AN4_ANA & ENABLE_AN5_ANA & ENABLE_AN6_ANA & ENABLE_AN7_ANA & ENABLE_AN8_ANA & ENABLE_AN9_ANA)
 #define ADCSSL_SETTING  (SKIP_SCAN_AN0 & SKIP_SCAN_AN1 & SKIP_SCAN_AN2 & SKIP_SCAN_AN6 & SKIP_SCAN_AN7 & SKIP_SCAN_AN8 & SKIP_SCAN_AN9 & SKIP_SCAN_AN10 & SKIP_SCAN_AN11 & SKIP_SCAN_AN12 & SKIP_SCAN_AN13 & SKIP_SCAN_AN14 & SKIP_SCAN_AN15)
-#define ADCON3_SETTING  (ADC_SAMPLE_TIME_4 & ADC_CONV_CLK_SYSTEM & ADC_CONV_CLK_9Tcy2)
+#define ADCON3_SETTING  (ADC_SAMPLE_TIME_20 & ADC_CONV_CLK_SYSTEM & ADC_CONV_CLK_20Tcy)
 
 /* 
    ---------- TMR1 Configuration -----------
@@ -234,6 +233,25 @@ extern ETMCanBoardData               slave_board_data;
 
 
 typedef struct {
+  unsigned int control_state;
+  unsigned int hvps_max_program;
+  unsigned int eoc_not_reached_count;
+  unsigned int run_post_pulse_process;
+  unsigned int no_pulse_counter;
+  unsigned int pulse_counter;
+  unsigned int pulse_level;
+  unsigned int fault_wait_time;
+  unsigned int pulse_id;
+  unsigned int vmon_at_eoc_period;
+  unsigned int vprog_at_eoc_period;
+  unsigned int store_lambda_voltage;
+  unsigned int hv_lambda_power_wait;
+  unsigned int lambda_reached_eoc;
+  unsigned int vprog_scale_factor;
+  unsigned int vmon_scale_factor;
+  unsigned int software_config_number;
+  unsigned int startup_counter;
+
   TYPE_PUBLIC_ANALOG_INPUT analog_input_lambda_vmon;               // 1V per LSB
   TYPE_PUBLIC_ANALOG_INPUT analog_input_lambda_vpeak;              // 1V per LSB
   TYPE_PUBLIC_ANALOG_INPUT analog_input_lambda_imon;               // 100uA per LSB
@@ -244,29 +262,10 @@ typedef struct {
   TYPE_PUBLIC_ANALOG_INPUT analog_input_neg_15v_mon;               // 1mV per LSB
   TYPE_PUBLIC_ANALOG_INPUT analog_input_pic_adc_test_dac;          // 62.5uV per LSB
 
-
   TYPE_PUBLIC_ANALOG_OUTPUT analog_output_high_energy_vprog;       // 1V per LSB
   TYPE_PUBLIC_ANALOG_OUTPUT analog_output_low_energy_vprog;        // 1V per LSB
-
   TYPE_PUBLIC_ANALOG_OUTPUT analog_output_spare;                   // 1mV per LSB
   TYPE_PUBLIC_ANALOG_OUTPUT analog_output_adc_test;                // 62.5uV per LSB
-
-  unsigned int eoc_not_reached_count;
-  unsigned int control_state;
-
-  
-  unsigned int run_post_pulse_process;
-
-  unsigned int no_pulse_counter;
-  unsigned int pulse_counter;
-
-  unsigned int pulse_level;
-  
-  
-  unsigned int fault_wait_time;
-  unsigned int pulse_id;
-  //  unsigned int previous_pulse_id;
-
 
   TYPE_DIGITAL_INPUT digital_sum_flt;
   TYPE_DIGITAL_INPUT digital_hv_off;
@@ -275,16 +274,6 @@ typedef struct {
   TYPE_DIGITAL_INPUT digital_over_temp;
   TYPE_DIGITAL_INPUT digital_interlock;
   TYPE_DIGITAL_INPUT digital_load_flt;
-
-
-  unsigned int vmon_at_eoc_period;
-  unsigned int vprog_at_eoc_period;
-  unsigned int store_lambda_voltage;
-
-  unsigned int hv_lambda_power_wait;
-  unsigned int lambda_reached_eoc;
-
-  //unsigned int prf_ok;
 
 } LambdaControlData;
 
@@ -301,10 +290,6 @@ extern LambdaControlData global_data_A37342;
 #define STATE_FAULT                  60
 
 
-
-#define DELAY_TCY_5US                FCY_CLK_MHZ*5
-
-
 #define _LOGGED_LAMBDA_NOT_POWERED                      _WARNING_0
 #define _LOGGED_LAMBDA_READBACK_HV_OFF                  _WARNING_1
 #define _LOGGED_LAMBDA_PHASE_LOSS                       _WARNING_2
@@ -314,7 +299,6 @@ extern LambdaControlData global_data_A37342;
 #define _LOGGED_LAMBDA_SUM_FAULT                        _WARNING_6
 
 #define _FAULT_CAN_COMMUNICATION_LATCHED                _FAULT_0
-//#define _FAULT_HIGH_VOLTAGE_DID_NOT_STARTUP             _FAULT_1
 
 #define _STATUS_LAMBDA_AT_EOC                           _NOT_LOGGED_0
 #define _STATUS_LAMBDA_HIGH_ENERGY                      _NOT_LOGGED_1
@@ -323,18 +307,10 @@ extern LambdaControlData global_data_A37342;
 #define HV_LAMBDA_MIN_VPROG            3000
 #define HV_LAMBDA_DAC_ZERO_OUTPUT      0x0000    // This will set the DAC output to Zero (program of Zero as well)
 
-
-
-#define LAMBDA_HEATSINK_OVER_TEMP      57000     // 57 Deg C
-#define TRIP_COUNTER_100mS             10
-#define TRIP_COUNTER_1Sec              100
-
 #define HV_ON_LAMBDA_SET_POINT_REFRESH_RATE_WHEN_NOT_PULSING            200             // 2 seconds
-
-
 #define AC_POWER_UP_DELAY  100                           // 1 Seconds - This is the time it take AC power to be applied to the Lambda after HV ON is enabled
 #define TIME_WAIT_FOR_LAMBDA_TO_SET_FAULT_OUTPUTS   300  // 3 Seconds
-#define MAX_TIME_TO_WAIT_FOR_EOC          400         // 4 Seconds
+
 
 
 #define PWR_5V_OVER_FLT        5200                   // 5.2 V

@@ -227,8 +227,8 @@ typedef struct {
   // Can data log - 0x29Z
   unsigned int eeprom_crc_error_count;
   unsigned int cmd_data_register_read_invalid_index;
-  unsigned int debugging_TBD_17;    // Debugging TBD
-  unsigned int debugging_TBD_16;    // Debugging TBD
+  unsigned int debugging_TBD_17;    // 1 here indicates that the EEProm had error at startup
+  unsigned int debugging_TBD_16;    // count of EEProm Registers that had to be loaded with default values
 
   // Can data log - 0x2AZ
   unsigned int reset_count;
@@ -457,7 +457,7 @@ unsigned int ETMCanBufferNotEmpty(ETMCanMessageBuffer* buffer_ptr);
 //                                               0bXXX0000NNNNNNNX0
 #define ETM_CAN_MASTER_MSG_FILTER_RF0            0b0000100000000000  // This is used to recieve RTSP response - Action TBD
 //                                               0bXXX0001NNAAAAAX0
-#define ETM_CAN_MASTER_MSG_FILTER_RF1            0b0000010000000000  // This will accept STATUS message from slaves.  Needs to be or'ed with ECB ADDRESS << 2
+#define ETM_CAN_MASTER_MSG_FILTER_RF1            0b0000001000000000
 
 // RX1  Mask and Filters
 //                                               0bXXX1PPPPPPAAAAX0
@@ -508,7 +508,7 @@ unsigned int ETMCanBufferNotEmpty(ETMCanMessageBuffer* buffer_ptr);
 
 
 
-//#define CXCFG2_VALUE                             0b0000001110010001      // This will created a bit timing of 10x TQ
+#define CXCFG2_VALUE                             0b0000001110010001      // This will created a bit timing of 10x TQ
 /*
   Can Bit Timing
   Syncchronization segment     - 1xTq
@@ -520,7 +520,7 @@ unsigned int ETMCanBufferNotEmpty(ETMCanMessageBuffer* buffer_ptr);
 
 */
 
-
+//#define CXCFG2_VALUE                             0b0000001110011010      // This will created a bit timing of 12x TQ
 /*
   Can Bit Timing
   Syncchronization segment     - 1xTq
@@ -531,7 +531,7 @@ unsigned int ETMCanBufferNotEmpty(ETMCanMessageBuffer* buffer_ptr);
   Maximum Jump Width(CXCFG1)   - 1xTq
 
 */
-#define CXCFG2_VALUE                             0b0000001110011010      // This will created a bit timing of 12x TQ
+
 /*
   DPARKER -  In order to get the CAN network to work it was necessary to increase the time of each bit.
   With testing we may be able to get the values back down to 10xTQ which is 1Mbit
@@ -571,6 +571,7 @@ unsigned int ETMCanBufferNotEmpty(ETMCanMessageBuffer* buffer_ptr);
 #define ETM_CAN_CMD_ID_SET_RAM_DEBUG                    0x04
 #define ETM_CAN_CMD_ID_SET_EEPROM_DEBUG                 0x05
 #define ETM_CAN_CMD_ID_SET_IGNORE_FAULTS                0x06
+#define ETM_CAN_CMD_ID_CLEAR_DEBUG                      0x07
 
 #define ETM_CAN_CMD_ID_HVPS_SET_POINTS                  0x10
 #define ETM_CAN_CMD_ID_MAGNET_SET_POINTS                0x11
@@ -663,14 +664,14 @@ unsigned int ETMCanBufferNotEmpty(ETMCanMessageBuffer* buffer_ptr);
 
 //0x380 -> 0x3F0 Available for Future Calibration data channels 8->F
 */
-/*
+
 // Custom High Speed Data Logging Registers
 #define ETM_CAN_DATA_LOG_REGISTER_HV_LAMBDA_FAST_LOG_0                  ETM_CAN_DATA_LOG_REGISTER_FAST_LOG_0 | ETM_CAN_ADDR_HV_LAMBDA_BOARD
 #define ETM_CAN_DATA_LOG_REGISTER_MAGNETRON_MON_FAST_LOG_0              ETM_CAN_DATA_LOG_REGISTER_FAST_LOG_0 | ETM_CAN_ADDR_MAGNETRON_CURRENT_BOARD
 #define ETM_CAN_DATA_LOG_REGISTER_AFC_FAST_LOG_0                        ETM_CAN_DATA_LOG_REGISTER_FAST_LOG_0 | ETM_CAN_ADDR_AFC_CONTROL_BOARD
 #define ETM_CAN_DATA_LOG_REGISTER_TARGET_MON_FAST_LOG_0                 ETM_CAN_DATA_LOG_REGISTER_FAST_LOG_0 | ETM_CAN_ADDR_TARGET_CURRENT_BOARD
 #define ETM_CAN_DATA_LOG_REGISTER_DOSE_LOG_0                            ETM_CAN_DATA_LOG_REGISTER_DOSE_LOG_0 | ETM_CAN_ADDR_DOSE_MONITOR_BOARD
-*/
+
 // DPARKER NEED TO DECREASE THE AMOUNT OF PULSE BY PULSE DATA LOGGING ON 800HZ SYSTEM.  CONDENSE DATA TO SEND EVERY OTHER PULSE
 
 
@@ -691,5 +692,12 @@ unsigned int ETMCanBufferNotEmpty(ETMCanMessageBuffer* buffer_ptr);
 
 #define CAN_PORT_2  2
 #define CAN_PORT_1  1
+
+
+#define SYSTEM_CONFIGURATION_6_4_R                   0xA64A
+#define SYSTEM_CONFIGURATION_6_4_M                   0xA64B
+#define SYSTEM_CONFIGURATION_6_4_S                   0xA64C
+#define SYSTEM_CONFIGURATION_2_5_R                   0xA25A
+
 
 #endif
