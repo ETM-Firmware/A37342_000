@@ -6,8 +6,8 @@
 // SELECT ONE POWER SUPPLY
 //#define __HVPS_LC1202_20KV
 //#define __HVPS_LC1202_20KV_ALLOW_PROGRAM_OVER_25KV
-//#define __HVPS_LC1202_25KV
-#define __HVPS_LC802_18KV
+#define __HVPS_LC1202_25KV
+//#define __HVPS_LC802_18KV
 
 // SELECT ONE MAX REP-RATE
 //#define __PRF_MAX_800
@@ -38,6 +38,9 @@
 #define HV_LAMBDA_MAX_VPROG     22100
 #define SOFTWARE_DASH_NUMBER    100
 #define __HVPS_LC1202
+#define FIRMWARE_AGILE_REV     8
+#define FIRMWARE_BRANCH        0
+#define FIRMWARE_BRANCH_REV    0
 #endif
 
 
