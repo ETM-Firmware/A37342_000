@@ -39,10 +39,15 @@ unsigned char ETMCanSlaveGetDiscreteCMD(void);
   If there are no commands, will return 0.
 */
 
-void ETMCanSlaveLogPulseData(unsigned int word3, unsigned int word2, unsigned int word1, unsigned int word0);
+
+void ETMCanSlaveLogPulseData(unsigned int pulse_count, unsigned int log_data_1, unsigned int log_data_0);
 /*
   This is used to log pulse by pulse data
+  
+  If the pulse count is even, the data will be saved.
+  If the pusle count is odd, the the data will be sent out
 */
+
 
 
 void ETMCanSlaveTriggerRecieved(void);
@@ -50,6 +55,11 @@ void ETMCanSlaveTriggerRecieved(void);
   Call this once after a trigger to automatically update pulse and level based on the mode of operation.
   That way if a sync_level command the system will automatically pulse at the correct level on the next trigger.
 */
+
+
+
+unsigned char ETMCanSlaveGetPulseLevel(void);
+unsigned char ETMCanSlaveGetPulseCount(void);
 
 
 unsigned int ETMCanSlaveGetPulseLevelAndCount(void);
@@ -308,6 +318,7 @@ unsigned int ETMCanSlaveGetSetting(unsigned char setting_select);
   24 Words of board data
   8  Words of board configuration
 */
+
 
 
 #endif

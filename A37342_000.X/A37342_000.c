@@ -177,6 +177,43 @@ void DoStateMachine(void) {
 void DoPostPulseProcess(void) {
   // Send the pulse data up to the ECB for logging
 
+
+  global_data_A37342.pulse_id = ETMCanSlaveGetPulseCount();
+  global_data_A37342.pulse_level = ETMCanSlaveGetPulseLevel();
+
+  switch (global_data_A37342.pulse_level) {
+    
+  case DOSE_SELECT_DOSE_LEVEL_0:
+    ETMAnalogOutputSetPoint(&global_data_A37342.analog_output_low_energy_vprog, ETMCanSlaveGetSetting(HVPS_SET_POINT_DOSE_0));
+    ETMAnalogOutputSetPoint(&global_data_A37342.analog_output_high_energy_vprog, ETMCanSlaveGetSetting(HVPS_SET_POINT_DOSE_1));
+    PIN_LAMBDA_VOLTAGE_SELECT = OLL_LAMBDA_VOLTAGE_SELECT_LOW_ENERGY;
+    _STATUS_LAMBDA_HIGH_ENERGY = 0;
+    break;
+    
+    
+  case DOSE_SELECT_DOSE_LEVEL_1:
+    ETMAnalogOutputSetPoint(&global_data_A37342.analog_output_low_energy_vprog, ETMCanSlaveGetSetting(HVPS_SET_POINT_DOSE_0));
+    ETMAnalogOutputSetPoint(&global_data_A37342.analog_output_high_energy_vprog, ETMCanSlaveGetSetting(HVPS_SET_POINT_DOSE_1));
+    PIN_LAMBDA_VOLTAGE_SELECT = !OLL_LAMBDA_VOLTAGE_SELECT_LOW_ENERGY;
+    _STATUS_LAMBDA_HIGH_ENERGY = 1;
+    break;
+
+
+  case DOSE_SELECT_DOSE_LEVEL_2:
+    ETMAnalogOutputSetPoint(&global_data_A37342.analog_output_low_energy_vprog, ETMCanSlaveGetSetting(HVPS_SET_POINT_DOSE_2));
+    ETMAnalogOutputSetPoint(&global_data_A37342.analog_output_high_energy_vprog, ETMCanSlaveGetSetting(HVPS_SET_POINT_DOSE_3));
+    PIN_LAMBDA_VOLTAGE_SELECT = OLL_LAMBDA_VOLTAGE_SELECT_LOW_ENERGY;
+    _STATUS_LAMBDA_HIGH_ENERGY = 0;
+    break;
+
+
+  case DOSE_SELECT_DOSE_LEVEL_3:
+    ETMAnalogOutputSetPoint(&global_data_A37342.analog_output_low_energy_vprog, ETMCanSlaveGetSetting(HVPS_SET_POINT_DOSE_2));
+    ETMAnalogOutputSetPoint(&global_data_A37342.analog_output_high_energy_vprog, ETMCanSlaveGetSetting(HVPS_SET_POINT_DOSE_3));
+    PIN_LAMBDA_VOLTAGE_SELECT = !OLL_LAMBDA_VOLTAGE_SELECT_LOW_ENERGY;
+    _STATUS_LAMBDA_HIGH_ENERGY = 1;
+    break;
+  }
   
   // Update the HV Lambda Program Values
   WriteLTC265XTwoChannels(&U1_LTC2654,
@@ -193,45 +230,10 @@ void DoPostPulseProcess(void) {
 
 void DoA37342(void) {
   static unsigned long ten_millisecond_holding_var;
-  unsigned int pulse_count_and_level;
-  unsigned char discrete_cmd;
-  static unsigned int discrete_cmd_counter;
+
   
   ETMCanSlaveDoCan();
-  pulse_count_and_level = ETMCanSlaveGetPulseLevelAndCount();
-  global_data_A37342.pulse_id = pulse_count_and_level & 0x00FF;
-  global_data_A37342.pulse_level = (pulse_count_and_level & 0xFF00) >> 8;
-  
-  switch (global_data_A37342.pulse_level) {
-    
-  case DOSE_SELECT_DOSE_LEVEL_0:
-    ETMAnalogOutputSetPoint(&global_data_A37342.analog_output_low_energy_vprog, ETMCanSlaveGetSetting(HVPS_SET_POINT_DOSE_0));
-    PIN_LAMBDA_VOLTAGE_SELECT = OLL_LAMBDA_VOLTAGE_SELECT_LOW_ENERGY;
-    _STATUS_LAMBDA_HIGH_ENERGY = 0;
-    break;
-    
-    
-  case DOSE_SELECT_DOSE_LEVEL_1:
-    ETMAnalogOutputSetPoint(&global_data_A37342.analog_output_high_energy_vprog, ETMCanSlaveGetSetting(HVPS_SET_POINT_DOSE_1));
-    PIN_LAMBDA_VOLTAGE_SELECT = !OLL_LAMBDA_VOLTAGE_SELECT_LOW_ENERGY;
-    _STATUS_LAMBDA_HIGH_ENERGY = 1;
-    break;
 
-
-  case DOSE_SELECT_DOSE_LEVEL_2:
-    ETMAnalogOutputSetPoint(&global_data_A37342.analog_output_low_energy_vprog, ETMCanSlaveGetSetting(HVPS_SET_POINT_DOSE_2));
-    PIN_LAMBDA_VOLTAGE_SELECT = OLL_LAMBDA_VOLTAGE_SELECT_LOW_ENERGY;
-    _STATUS_LAMBDA_HIGH_ENERGY = 0;
-    break;
-
-
-  case DOSE_SELECT_DOSE_LEVEL_3:
-    ETMAnalogOutputSetPoint(&global_data_A37342.analog_output_high_energy_vprog, ETMCanSlaveGetSetting(HVPS_SET_POINT_DOSE_3));
-    PIN_LAMBDA_VOLTAGE_SELECT = !OLL_LAMBDA_VOLTAGE_SELECT_LOW_ENERGY;
-    _STATUS_LAMBDA_HIGH_ENERGY = 1;
-    break;
-  }
-    
   if (global_data_A37342.run_post_pulse_process) {
     global_data_A37342.run_post_pulse_process = 0;  
     DoPostPulseProcess();
@@ -244,28 +246,10 @@ void DoA37342(void) {
     global_data_A37342.hv_lambda_power_wait++;
     global_data_A37342.startup_counter++;
 
+    ETMCanSlaveSetDebugRegister(1, 0);
 
-    // DPARKER TESTING DISCRETE CMD
-    discrete_cmd = ETMCanSlaveGetDiscreteCMD();
-    switch (discrete_cmd) {
-
-    case DISCRETE_CMD_AFC_SELECT_MANUAL_MODE:
-      ETMCanSlaveSetDebugRegister(0, 44);
-      discrete_cmd_counter++;
-      break;
-
-    case DISCRETE_CMD_AFC_SELECT_AUTOMATIC_MODE:
-      ETMCanSlaveSetDebugRegister(0, 77);
-      discrete_cmd_counter++;
-      break;
-    }
-
-    ETMCanSlaveSetDebugRegister(1, discrete_cmd_counter);
-
-    ETMCanSlaveSetDebugRegister(2, (ETMCanSlaveGetPulseLevelAndCount()>>8));
-    ETMCanSlaveSetDebugRegister(3, (ETMCanSlaveGetPulseLevelAndCount() & 0x00FF));
-
-
+    ETMCanSlaveSetDebugRegister(2, global_data_A37342.pulse_id);
+    ETMCanSlaveSetDebugRegister(3, global_data_A37342.pulse_level);
     
     // Update debugging information
     //ETMCanSlaveSetDebugRegister(0, global_data_A37342.analog_input_lambda_vmon.reading_scaled_and_calibrated);
@@ -684,8 +668,10 @@ void DisableHVLambda(void) {
   ETMAnalogOutputDisable(&global_data_A37342.analog_output_high_energy_vprog);
   ETMAnalogOutputDisable(&global_data_A37342.analog_output_low_energy_vprog);
 
-  _INT1IE = 0; 
+  //_INT1IE = 0;  DPARKER FORCE ENABLE
+  _INT1IE = 1;
 
+ 
   // Set digital output to inhibit the lambda
   PIN_LAMBDA_INHIBIT = OLL_INHIBIT_LAMBDA;
   
@@ -755,7 +741,9 @@ void __attribute__((interrupt, shadow, no_auto_psv)) _INT1Interrupt(void) {
   _T1IF = 0;
   _T1IE = 1;
   
-  ETMCanSlaveTriggerRecieved();
+  global_data_A37342.run_post_pulse_process = 1;
+  global_data_A37342.pulse_id = ETMCanSlaveGetPulseCount();
+  global_data_A37342.pulse_level = ETMCanSlaveGetPulseLevel();
   
 }
 
@@ -863,13 +851,24 @@ void __attribute__((interrupt, no_auto_psv)) _T1Interrupt(void) {
   // DPARKER, consider adding delay so that the logging message isn't scheduled durring pulse
 
 
-  
+  if (TEST_POINT_B == 1) {
+    TEST_POINT_B = 0;
+  } else {
+    TEST_POINT_B = 1;
+  }
   if (ETMCanSlaveGetSyncMsgHighSpeedLogging()) {
+    /*
     ETMCanSlaveLogPulseData(global_data_A37342.pulse_id,
 			    global_data_A37342.vmon_at_eoc_period,
-			    0,
 			    global_data_A37342.vprog_at_eoc_period);
+    */
+    // DPARKER TESTING
+    ETMCanSlaveLogPulseData(global_data_A37342.pulse_id,
+			    222,
+			    global_data_A37342.pulse_id);
   }
+
+  ETMCanSlaveTriggerRecieved();
 
 }
   

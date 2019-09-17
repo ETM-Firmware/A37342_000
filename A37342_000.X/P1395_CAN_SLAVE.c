@@ -7,6 +7,8 @@
 ETMCanBoardData           slave_board_data;            // This contains information that is always mirrored on ECB
 
 
+unsigned int ETMEEPromPrivateReadSinglePage(unsigned int page_number, unsigned int *page_data);
+// From ETM_EEPROM - this module only needs access to this fuction
 
 // DOSE LEVEL DEFINITIONS
 
@@ -21,16 +23,14 @@ ETMCanBoardData           slave_board_data;            // This contains informat
 #define DOSE_SELECT_INTERLEAVE_2_3_DOSE_LEVEL_3    0x24
 
 
-#define ETM_CAN_DATA_LOG_REGISTER_BOARD_SPECIFIC_0               0x000
-#define ETM_CAN_DATA_LOG_REGISTER_BOARD_SPECIFIC_1               0x010
-#define ETM_CAN_DATA_LOG_REGISTER_BOARD_SPECIFIC_2               0x020
-#define ETM_CAN_DATA_LOG_REGISTER_BOARD_SPECIFIC_3               0x030
-#define ETM_CAN_DATA_LOG_REGISTER_BOARD_SPECIFIC_4               0x040
-#define ETM_CAN_DATA_LOG_REGISTER_BOARD_SPECIFIC_5               0x050
-#define ETM_CAN_DATA_LOG_REGISTER_CONFIG_0                       0x060
-#define ETM_CAN_DATA_LOG_REGISTER_CONFIG_1                       0x070
-
-#define ETM_CAN_DATA_LOG_REGISTER_PULSE_0                        0x080
+#define ETM_CAN_DATA_LOG_REGISTER_BOARD_SPECIFIC_0               0x100
+#define ETM_CAN_DATA_LOG_REGISTER_BOARD_SPECIFIC_1               0x110
+#define ETM_CAN_DATA_LOG_REGISTER_BOARD_SPECIFIC_2               0x120
+#define ETM_CAN_DATA_LOG_REGISTER_BOARD_SPECIFIC_3               0x130
+#define ETM_CAN_DATA_LOG_REGISTER_BOARD_SPECIFIC_4               0x140
+#define ETM_CAN_DATA_LOG_REGISTER_BOARD_SPECIFIC_5               0x150
+#define ETM_CAN_DATA_LOG_REGISTER_CONFIG_0                       0x160
+#define ETM_CAN_DATA_LOG_REGISTER_CONFIG_1                       0x170
 
 
 #define ETM_CAN_DATA_LOG_REGISTER_DEFAULT_DEBUG_0                0x1C0
@@ -55,7 +55,6 @@ ETMCanBoardData           slave_board_data;            // This contains informat
 #define ETM_CAN_DATA_LOG_REGISTER_I2C_SPI_SCALE_SELF_TEST_DEBUG  0x2B0
 #define ETM_CAN_DATA_LOG_REGISTER_STANDARD_DEBUG_TBD_3           0x2C0
 #define ETM_CAN_DATA_LOG_REGISTER_STANDARD_DEBUG_TBD_2           0x2D0
-
 #define ETM_CAN_DATA_LOG_REGISTER_STANDARD_DEBUG_TBD_1           0x2E0
 #define ETM_CAN_DATA_LOG_REGISTER_STANDARD_DEBUG_TBD_0           0x2F0
 
@@ -71,6 +70,11 @@ ETMCanBoardData           slave_board_data;            // This contains informat
 
 #define SLAVE_TRANSMIT_MILLISECONDS       100
 #define SLAVE_TIMEOUT_MILLISECONDS        250
+
+
+#define LOG_DEFAULT_VALUE_SLAVE     0xFFDF
+#define LOG_DEFAULT_VALUE_SLAVE_ALT 0xFFCF
+
 
 #if defined(__dsPIC30F6014A__)
 #define RAM_SIZE_WORDS  4096
@@ -1412,9 +1416,36 @@ void ETMCanSlaveSendStatus(void) {
 }
 
 
-void ETMCanSlaveLogPulseData(unsigned int word3, unsigned int word2, unsigned int word1, unsigned int word0) {
-  ETMCanSlaveLogData(0, word3, word2, word1, word0);
+void ETMCanSlaveLogPulseData(unsigned int pulse_count, unsigned int log_data_1, unsigned int log_data_0) {
+  static unsigned int data_word_3;
+  static unsigned int data_word_2;
+  static unsigned int previous_pulse_count;
+  
+  if ((pulse_count & 0x0001) == 0) {
+    // this is an even number pulse count, store the data
+    data_word_3 = log_data_1;
+    data_word_2 = log_data_0;
+    previous_pulse_count = pulse_count;
+    return;
+  }
+  // This is an odd pulse count, send out the data
+
+  if (previous_pulse_count != (pulse_count & 0xFFFE)) {
+    data_word_3 = LOG_DEFAULT_VALUE_SLAVE_ALT;
+    data_word_2 = LOG_DEFAULT_VALUE_SLAVE_ALT;
+  }
+  
+  pulse_count >>= 1;
+  pulse_count &= 0x000F;
+  pulse_count <<= 4;
+  ETMCanSlaveLogData(pulse_count, data_word_3, data_word_2, log_data_1, log_data_0);
+
+  data_word_3 = LOG_DEFAULT_VALUE_SLAVE;
+  data_word_2 = LOG_DEFAULT_VALUE_SLAVE;
 }
+
+
+
 
 void ETMCanSlaveLogData(unsigned int packet_id, unsigned int word3, unsigned int word2, unsigned int word1, unsigned int word0) {
   ETMCanMessage log_message;
@@ -1624,7 +1655,16 @@ void ETMCanSlaveTriggerRecieved(void) {
 }
 
 
+unsigned char ETMCanSlaveGetPulseLevel(void) {
+  return (etm_can_slave_sync_message.next_energy_level & 0x0F);
+}
 
+unsigned char ETMCanSlaveGetPulseCount(void) {
+  return (etm_can_slave_sync_message.pulse_count);
+}
+
+
+// DPARKER - Remove this function
 unsigned int ETMCanSlaveGetPulseLevelAndCount(void) {
   unsigned int  return_value;
   

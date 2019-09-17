@@ -564,115 +564,32 @@ unsigned int ETMCanBufferNotEmpty(ETMCanMessageBuffer* buffer_ptr);
 
 // Board Specific Register Locations
 
-#define ETM_CAN_CMD_ID_RESET_MCU                        0x00
-#define ETM_CAN_CMD_ID_LOAD_DEFAULT_CALIBRATION         0x01
-#define ETM_CAN_CMD_ID_LOAD_REV_AND_SERIAL_NUMBER       0x02
-#define ETM_CAN_CMD_ID_SET_CAL_PAIR                     0x03
-#define ETM_CAN_CMD_ID_SET_RAM_DEBUG                    0x04
-#define ETM_CAN_CMD_ID_SET_EEPROM_DEBUG                 0x05
-#define ETM_CAN_CMD_ID_SET_IGNORE_FAULTS                0x06
-#define ETM_CAN_CMD_ID_CLEAR_DEBUG                      0x07
+#define ETM_CAN_CMD_ID_RESET_MCU                                        0x00
+#define ETM_CAN_CMD_ID_LOAD_DEFAULT_CALIBRATION                         0x01
+#define ETM_CAN_CMD_ID_LOAD_REV_AND_SERIAL_NUMBER                       0x02
+#define ETM_CAN_CMD_ID_SET_CAL_PAIR                                     0x03
+#define ETM_CAN_CMD_ID_SET_RAM_DEBUG                                    0x04
+#define ETM_CAN_CMD_ID_SET_EEPROM_DEBUG                                 0x05
+#define ETM_CAN_CMD_ID_SET_IGNORE_FAULTS                                0x06
+#define ETM_CAN_CMD_ID_CLEAR_DEBUG                                      0x07
 
-#define ETM_CAN_CMD_ID_HVPS_SET_POINTS                  0x10
-#define ETM_CAN_CMD_ID_MAGNET_SET_POINTS                0x11
-#define ETM_CAN_CMD_ID_AFC_HOME_POSTION                 0x12
-#define ETM_CAN_CMD_ID_GUN_PULSE_TOP_SET_POINTS         0x13
-#define ETM_CAN_CMD_ID_GUN_CATHODE_SET_POINTS           0x14
-#define ETM_CAN_CMD_ID_ALL_DOSE_SET_POINTS_REGISTER_A   0x15
-#define ETM_CAN_CMD_ID_ALL_DOSE_SET_POINTS_REGISTER_B   0x16
-
-
-#define ETM_CAN_CMD_ID_DISCRETE_CMD                     0x1F                       
-
-#define DISCRETE_CMD_BUFFER_EMPTY                       0x00
-#define DISCRETE_CMD_AFC_DO_AUTO_ZERO                   0x01
-#define DISCRETE_CMD_AFC_SELECT_MANUAL_MODE             0x02
-#define DISCRETE_CMD_AFC_SELECT_AUTOMATIC_MODE          0x03
-#define DISCRETE_CMD_COOLING_RESET_BOTTLE_COUNT         0x04
+#define ETM_CAN_CMD_ID_HVPS_SET_POINTS                                  0x10
+#define ETM_CAN_CMD_ID_MAGNET_SET_POINTS                                0x11
+#define ETM_CAN_CMD_ID_AFC_HOME_POSTION                                 0x12
+#define ETM_CAN_CMD_ID_GUN_PULSE_TOP_SET_POINTS                         0x13
+#define ETM_CAN_CMD_ID_GUN_CATHODE_SET_POINTS                           0x14
+#define ETM_CAN_CMD_ID_ALL_DOSE_SET_POINTS_REGISTER_A                   0x15
+#define ETM_CAN_CMD_ID_ALL_DOSE_SET_POINTS_REGISTER_B                   0x16
 
 
+#define ETM_CAN_CMD_ID_DISCRETE_CMD                                     0x1F                       
 
-//------------------ DATA LOGGING REGISTERS --------------------------//
+#define DISCRETE_CMD_BUFFER_EMPTY                                       0x00
+#define DISCRETE_CMD_AFC_DO_AUTO_ZERO                                   0x01
+#define DISCRETE_CMD_AFC_SELECT_MANUAL_MODE                             0x02
+#define DISCRETE_CMD_AFC_SELECT_AUTOMATIC_MODE                          0x03
+#define DISCRETE_CMD_COOLING_RESET_BOTTLE_COUNT                         0x04
 
-
-
-/*
-// Default data logging registers
-#define ETM_CAN_DATA_LOG_REGISTER_BOARD_SPECIFIC_0                      0x000 // This gets or'd with board address
-#define ETM_CAN_DATA_LOG_REGISTER_BOARD_SPECIFIC_1                      0x010 // This gets or'd with board address
-#define ETM_CAN_DATA_LOG_REGISTER_BOARD_SPECIFIC_2                      0x020 // This gets or'd with board address
-#define ETM_CAN_DATA_LOG_REGISTER_BOARD_SPECIFIC_3                      0x030 // This gets or'd with board address
-#define ETM_CAN_DATA_LOG_REGISTER_BOARD_SPECIFIC_4                      0x040 // This gets or'd with board address
-#define ETM_CAN_DATA_LOG_REGISTER_BOARD_SPECIFIC_5                      0x050 // This gets or'd with board address
-
-#define ETM_CAN_DATA_LOG_REGISTER_STANDARD_ANALOG_DATA                  0x060 // This gets or'd with board address
-#define ETM_CAN_DATA_LOG_REGISTER_RAM_WATCH_DATA                        0x070 // This gets or'd with board address
-
-#define ETM_CAN_DATA_LOG_REGISTER_CONFIG_0                              0x080 // This gets or'd with board address
-#define ETM_CAN_DATA_LOG_REGISTER_CONFIG_1                              0x090 // This gets or'd with board address
-
-// 0x0A0 - > 0x0F0 Available future Use
-
-#define ETM_CAN_DATA_LOG_REGISTER_FAST_LOG_0                            0x100 // This gets or'd with board address
-#define ETM_CAN_DATA_LOG_REGISTER_FAST_LOG_1                            0x110 // This gets or'd with board address
-#define ETM_CAN_DATA_LOG_REGISTER_FAST_LOG_2                            0x120 // This gets or'd with board address
-#define ETM_CAN_DATA_LOG_REGISTER_FAST_LOG_3                            0x130 // This gets or'd with board address
-
-#define ETM_CAN_DATA_LOG_SCOPE_A_DATA_16_BIT                            0x140 // This gets or'd with board address
-#define ETM_CAN_DATA_LOG_SCOPE_A_DATA_8_BIT                             0x150 // This gets or'd with board address
-#define ETM_CAN_DATA_LOG_SCOPE_A_DATA_12_BIT                            0x160 // This gets or'd with board address
-#define ETM_CAN_DATA_LOG_SCOPE_A_DATA_10_BIT                            0x170 // This gets or'd with board address
-
-#define ETM_CAN_DATA_LOG_SCOPE_B_DATA_16_BIT                            0x180 // This gets or'd with board address
-#define ETM_CAN_DATA_LOG_SCOPE_B_DATA_8_BIT                             0x190 // This gets or'd with board address
-#define ETM_CAN_DATA_LOG_SCOPE_B_DATA_12_BIT                            0x1A0 // This gets or'd with board address
-#define ETM_CAN_DATA_LOG_SCOPE_B_DATA_10_BIT                            0x1B0 // This gets or'd with board address
-
-#define ETM_CAN_DATA_LOG_SCOPE_PULSE_CURRENT                            0x1C0 // This gets or'd with board address
-
-// 0x1D0 - Unused
-
-#define ETM_CAN_DATA_LOG_SCOPE_HV_VMON_12_BIT                           0x1E0 // This gets or'd with board address
-#define ETM_CAN_DATA_LOG_SCOPE_HV_VMON_8_BIT                            0x1F0 // This gets or'd with board address
-
-#define ETM_CAN_DATA_LOG_REGISTER_DEBUG_0                               0x200 // This gets or'd with board address
-#define ETM_CAN_DATA_LOG_REGISTER_DEBUG_1                               0x210 // This gets or'd with board address
-#define ETM_CAN_DATA_LOG_REGISTER_DEBUG_2                               0x220 // This gets or'd with board address
-#define ETM_CAN_DATA_LOG_REGISTER_DEBUG_3                               0x230 // This gets or'd with board address
-
-#define ETM_CAN_DATA_LOG_REGISTER_STANDARD_DEBUG_0                      0x240 // This gets or'd with board address
-#define ETM_CAN_DATA_LOG_REGISTER_STANDARD_DEBUG_1                      0x250 // This gets or'd with board address
-#define ETM_CAN_DATA_LOG_REGISTER_STANDARD_DEBUG_2                      0x260 // This gets or'd with board address
-#define ETM_CAN_DATA_LOG_REGISTER_STANDARD_DEBUG_3                      0x270 // This gets or'd with board address
-#define ETM_CAN_DATA_LOG_REGISTER_STANDARD_DEBUG_4                      0x280 // This gets or'd with board address
-#define ETM_CAN_DATA_LOG_REGISTER_STANDARD_DEBUG_5                      0x290 // This gets or'd with board address
-#define ETM_CAN_DATA_LOG_REGISTER_STANDARD_DEBUG_6                      0x2A0 // This gets or'd with board address
-#define ETM_CAN_DATA_LOG_REGISTER_STANDARD_DEBUG_7                      0x2B0 // This gets or'd with board address
-#define ETM_CAN_DATA_LOG_REGISTER_STANDARD_DEBUG_8                      0x2C0 // This gets or'd with board address
-#define ETM_CAN_DATA_LOG_REGISTER_STANDARD_DEBUG_9                      0x2D0 // This gets or'd with board address
-#define ETM_CAN_DATA_LOG_REGISTER_STANDARD_DEBUG_10                     0x2E0 // This gets or'd with board address
-#define ETM_CAN_DATA_LOG_REGISTER_STANDARD_DEBUG_11                     0x2F0 // This gets or'd with board address
-
-#define ETM_CAN_DATA_LOG_REGISTER_CALIBRATION_DATA_0                    0x300 // This gets or'd with board address
-#define ETM_CAN_DATA_LOG_REGISTER_CALIBRATION_DATA_1                    0x310 // This gets or'd with board address
-#define ETM_CAN_DATA_LOG_REGISTER_CALIBRATION_DATA_2                    0x320 // This gets or'd with board address
-#define ETM_CAN_DATA_LOG_REGISTER_CALIBRATION_DATA_3                    0x330 // This gets or'd with board address
-#define ETM_CAN_DATA_LOG_REGISTER_CALIBRATION_DATA_4                    0x340 // This gets or'd with board address
-#define ETM_CAN_DATA_LOG_REGISTER_CALIBRATION_DATA_5                    0x350 // This gets or'd with board address
-#define ETM_CAN_DATA_LOG_REGISTER_CALIBRATION_DATA_6                    0x360 // This gets or'd with board address
-#define ETM_CAN_DATA_LOG_REGISTER_CALIBRATION_DATA_7                    0x370 // This gets or'd with board address
-
-//0x380 -> 0x3F0 Available for Future Calibration data channels 8->F
-*/
-
-// Custom High Speed Data Logging Registers
-#define ETM_CAN_DATA_LOG_REGISTER_HV_LAMBDA_FAST_LOG_0                  ETM_CAN_DATA_LOG_REGISTER_FAST_LOG_0 | ETM_CAN_ADDR_HV_LAMBDA_BOARD
-#define ETM_CAN_DATA_LOG_REGISTER_MAGNETRON_MON_FAST_LOG_0              ETM_CAN_DATA_LOG_REGISTER_FAST_LOG_0 | ETM_CAN_ADDR_MAGNETRON_CURRENT_BOARD
-#define ETM_CAN_DATA_LOG_REGISTER_AFC_FAST_LOG_0                        ETM_CAN_DATA_LOG_REGISTER_FAST_LOG_0 | ETM_CAN_ADDR_AFC_CONTROL_BOARD
-#define ETM_CAN_DATA_LOG_REGISTER_TARGET_MON_FAST_LOG_0                 ETM_CAN_DATA_LOG_REGISTER_FAST_LOG_0 | ETM_CAN_ADDR_TARGET_CURRENT_BOARD
-#define ETM_CAN_DATA_LOG_REGISTER_DOSE_LOG_0                            ETM_CAN_DATA_LOG_REGISTER_DOSE_LOG_0 | ETM_CAN_ADDR_DOSE_MONITOR_BOARD
-
-// DPARKER NEED TO DECREASE THE AMOUNT OF PULSE BY PULSE DATA LOGGING ON 800HZ SYSTEM.  CONDENSE DATA TO SEND EVERY OTHER PULSE
 
 
 
@@ -698,6 +615,8 @@ unsigned int ETMCanBufferNotEmpty(ETMCanMessageBuffer* buffer_ptr);
 #define SYSTEM_CONFIGURATION_6_4_M                   0xA64B
 #define SYSTEM_CONFIGURATION_6_4_S                   0xA64C
 #define SYSTEM_CONFIGURATION_2_5_R                   0xA25A
+
+//#define LOG_DEFAULT_VALUE 0xFFEF
 
 
 #endif
