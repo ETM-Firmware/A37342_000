@@ -2,8 +2,46 @@
 #define __P1395_CAN_SLAVE_PUBLIC_H
 
 #include "P1395_CAN_CORE.h"
+#include "P1395_CAN_CORE_PUBLIC.h"
 
-#define P1395_CAN_SLAVE_VERSION   0x0300
+
+#define P1395_CAN_SLAVE_VERSION   0x0310
+
+
+extern ETMCanBoardData           slave_board_data;            // This contains information that is always mirrored on ECB
+
+
+
+
+//------------ SLAVE PUBLIC FUNCTIONS AND VARIABLES ------------------- //
+
+typedef struct {
+  unsigned int  data[64];
+  unsigned int  average;
+  unsigned int  integral;
+  unsigned char pulse_count;
+  unsigned      arc_this_pulse:1;
+  unsigned      low_this_pulse:1;
+  unsigned      data_full:1;
+  unsigned      unused:5;
+} TYPE_PULSE_DATA;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 //------------ SLAVE PUBLIC FUNCTIONS AND VARIABLES ------------------- //
 
@@ -62,12 +100,6 @@ unsigned char ETMCanSlaveGetPulseLevel(void);
 unsigned char ETMCanSlaveGetPulseCount(void);
 
 
-unsigned int ETMCanSlaveGetPulseLevelAndCount(void);
-/*
-  Returns the next pulse level and count
-  The low bute is the pulse count
-  The high byte is the pulse_level_mode AND with 0xF to strip out the mode and be left with pulse level
-*/
 
 #define DOSE_SELECT_DOSE_LEVEL_0           0x1
 #define DOSE_SELECT_DOSE_LEVEL_1           0x2
@@ -92,7 +124,12 @@ void ETMCanSlaveSetDebugRegister(unsigned int debug_register, unsigned int debug
 
 
 void ETMCanSlaveSetDebugData(unsigned int debug_data_register, unsigned debug_value);
-
+/*
+  There are 16 debug registers, 0x0->0xF
+  This stores the value to a particular register
+  This information is available on the GUI and should be used to display real time inforamtion to help in debugging.
+  These can be freely assigned by the developer as needed
+*/
 
 
 unsigned int ETMCanSlaveGetComFaultStatus(void);
@@ -131,6 +168,45 @@ unsigned int ETMCanSlaveGetSyncMsgEnableFaultIgnore(void);
 
 unsigned int ETMCanSlaveGetSyncMsgResetEnable(void); // DPARKER CHANGE HOW THIS OPERATES
 unsigned int ETMCanSlaveGetSyncMsgClearDebug(void); // DPARKER CHANGE THIS TO BE A COMMAND INSTEAD OF Status bit
+
+
+
+
+// ------------ SCOPE SETTINGS ----------------------- //
+
+void ETMCanSlaveLogPulseByPulseData(unsigned int word3, unsigned int word2, unsigned int word1, unsigned int word0);
+/*
+  This is used to log pulse by pulse data
+*/
+
+void ETMCanSlaveLogPulseCurrent(TYPE_PULSE_DATA *pulse_data);
+/*
+  This is used to log magnetron or target current for a particular pulse
+  The Can module can not save every sample, so it will decide which data to save
+*/
+
+unsigned int ETMCanSlaveGetHVVmonScopeSelected(void);
+/*
+  If HV Vmon is requested from this board, returns HV_SCOPE_SELECTED, otherwise returns NO_SCOPE_SELECTED 
+
+  DPARKER, when would this be used?  Aren't the boards that are sampling HV output already sampling all the time
+  They are just not sending the data and the can module handles this
+*/
+
+void ETMCanSlaveSetScopeDataAddress(unsigned int scope_channel, unsigned int *data_address);
+/*
+  scope_channel must be less than 16
+  This is used to set the data monitoring address for each of the scope channels.
+  To make a particular address visable to the scope, assign it to one of the 16 channels
+*/
+
+void ETMCanSlaveLogHVVmonData(unsigned int sp4, unsigned int sp3, unsigned int sp2, unsigned int sp1, unsigned int sp0);
+/*
+  This will compress the 5 12 bit readings sp0 -> sp4 into 4 words and send the data to the ECB.
+*/
+
+
+
 
 
 

@@ -5,6 +5,10 @@
 
 #define OFFSET_ZERO 0 // DPARKER should this be in ETM_ANALOG or ETM_SCALE??
 
+
+unsigned int test_vprog_0_monitor;
+
+
 // Changes for working through a reset
 unsigned int setup_done;
 
@@ -230,10 +234,22 @@ void DoPostPulseProcess(void) {
 
 void DoA37342(void) {
   static unsigned long ten_millisecond_holding_var;
-
+  static unsigned long temp_timer_scope_test;
+  static unsigned int  temp_scope_test_b = 0;
   
   ETMCanSlaveDoCan();
 
+  test_vprog_0_monitor = ETMCanSlaveGetSetting(HVPS_SET_POINT_DOSE_0);
+
+  if (ETMTickRunOnceEveryNMilliseconds(1, &temp_timer_scope_test)) {
+      ETMCanSlaveLogHVVmonData(temp_scope_test_b+4,temp_scope_test_b+3,temp_scope_test_b+2,temp_scope_test_b+1,temp_scope_test_b);
+      temp_scope_test_b += 5;
+      temp_scope_test_b &= 0x0FFF;
+      ETMCanSlaveLogHVVmonData(temp_scope_test_b+4,temp_scope_test_b+3,temp_scope_test_b+2,temp_scope_test_b+1,temp_scope_test_b);
+      temp_scope_test_b += 5;
+      temp_scope_test_b &= 0x0FFF;
+  }
+  
   if (global_data_A37342.run_post_pulse_process) {
     global_data_A37342.run_post_pulse_process = 0;  
     DoPostPulseProcess();
@@ -408,7 +424,9 @@ void UpdateFaultsAndStatusBits(void) {
     _LOGGED_LAMBDA_LOAD_FLT = 0;
   }
 }
-    
+
+
+
 
 void InitializeA37342(void) {
 
@@ -467,6 +485,12 @@ void InitializeA37342(void) {
 			_PIN_RA7, _PIN_RG12);
 
   ETMCanSlaveLoadConfiguration(37342, SOFTWARE_DASH_NUMBER, FIRMWARE_AGILE_REV, FIRMWARE_BRANCH, FIRMWARE_BRANCH_REV);
+
+  ETMCanSlaveSetScopeDataAddress(0, &global_data_A37342.pulse_id);
+  ETMCanSlaveSetScopeDataAddress(1, &global_data_A37342.eoc_not_reached_count);
+  ETMCanSlaveSetScopeDataAddress(2, &global_data_A37342.no_pulse_counter);
+  ETMCanSlaveSetScopeDataAddress(3, &global_data_A37342.vmon_at_eoc_period);
+  ETMCanSlaveSetScopeDataAddress(4, &test_vprog_0_monitor);
   
 
   // Initialize LTC DAC

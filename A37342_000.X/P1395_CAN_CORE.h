@@ -572,6 +572,7 @@ unsigned int ETMCanBufferNotEmpty(ETMCanMessageBuffer* buffer_ptr);
 #define ETM_CAN_CMD_ID_SET_EEPROM_DEBUG                                 0x05
 #define ETM_CAN_CMD_ID_SET_IGNORE_FAULTS                                0x06
 #define ETM_CAN_CMD_ID_CLEAR_DEBUG                                      0x07
+#define ETM_CAN_CMD_ID_SCOPE_SETTINGS                                   0x08
 
 #define ETM_CAN_CMD_ID_HVPS_SET_POINTS                                  0x10
 #define ETM_CAN_CMD_ID_MAGNET_SET_POINTS                                0x11

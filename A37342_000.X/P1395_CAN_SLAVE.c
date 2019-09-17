@@ -3,6 +3,13 @@
 #include "P1395_CAN_SLAVE.h"
 #include "ETM.h"
 
+
+
+unsigned int pulse_data_transmit_index = 0xFF00;
+unsigned int pulse_data_to_transmit[40];
+
+
+
 // GLOBAL VARIABLES
 ETMCanBoardData           slave_board_data;            // This contains information that is always mirrored on ECB
 
@@ -32,6 +39,10 @@ unsigned int ETMEEPromPrivateReadSinglePage(unsigned int page_number, unsigned i
 #define ETM_CAN_DATA_LOG_REGISTER_CONFIG_0                       0x160
 #define ETM_CAN_DATA_LOG_REGISTER_CONFIG_1                       0x170
 
+#define ETM_CAN_DATA_LOG_REGISTER_SCOPE_A                        0x180
+#define ETM_CAN_DATA_LOG_REGISTER_SCOPE_B                        0x190
+#define ETM_CAN_DATA_LOG_REGISTER_PULSE_SCOPE_DATA               0x1A0
+#define ETM_CAN_DATA_LOG_REGISTER_HV_VMON_DATA                   0x1B0
 
 #define ETM_CAN_DATA_LOG_REGISTER_DEFAULT_DEBUG_0                0x1C0
 #define ETM_CAN_DATA_LOG_REGISTER_DEFAULT_DEBUG_1                0x1D0
@@ -71,6 +82,8 @@ unsigned int ETMEEPromPrivateReadSinglePage(unsigned int page_number, unsigned i
 #define SLAVE_TRANSMIT_MILLISECONDS       100
 #define SLAVE_TIMEOUT_MILLISECONDS        250
 
+#define SCOPE_CHANNEL_DISABLED  0
+#define SCOPE_CHANNEL_ACTIVE    1
 
 #define LOG_DEFAULT_VALUE_SLAVE     0xFFDF
 #define LOG_DEFAULT_VALUE_SLAVE_ALT 0xFFCF
@@ -100,15 +113,17 @@ unsigned int ETMEEPromPrivateReadSinglePage(unsigned int page_number, unsigned i
 
 
 //Local Funcations
-static void ETMCanSlaveLoadDefaultCalibration(void);
 static void ETMCanSlaveProcessMessage(void);
 static void ETMCanSlaveExecuteCMD(ETMCanMessage* message_ptr);           
 static void ETMCanSlaveTimedTransmit(void);
+static void ETMCanSlaveSendScopeData(void);
 static void ETMCanSlaveSendStatus(void);
 static void ETMCanSlaveLogData(unsigned int packet_id, unsigned int word3, unsigned int word2, unsigned int word1, unsigned int word0);
 static void ETMCanSlaveCheckForTimeOut(void);
 static void ETMCanSlaveSendUpdateIfNewNotReady(void);
 static void ETMCanSlaveClearDebug(void);
+static void Compact12BitInto16Bit(unsigned int *transmit_data, unsigned int *source_data, unsigned int count);
+static void ETMCanSlaveLoadDefaultCalibration(void);
 static void DoCanInterrupt(void);  //  Helper function for Can interupt handler
 
 
@@ -125,6 +140,17 @@ static unsigned long etm_can_slave_communication_timeout_holding_var;  // Used t
 static unsigned char etm_can_slave_com_loss;  // Keeps track of if communicantion from ECB has timed out
 static unsigned int setting_data_recieved;  // This keeps track of which settings registers have been recieved 
 static BUFFERBYTE64 discrete_cmd_buffer;  // Buffer for discrete commands that come in.  This is quiered and processed by the main code as needed
+
+
+
+#define SCOPE_DATA_SELECT_SIZE         16
+static unsigned int *scope_data_sources[SCOPE_DATA_SELECT_SIZE];
+static unsigned int *ram_ptr_a = 0;
+static unsigned int *ram_ptr_b = 0;
+static unsigned int *ram_ptr_c = 0;
+static unsigned int *ptr_scope_a_data_source = 0;
+static unsigned int *ptr_scope_b_data_source = 0;
+
 
 
 typedef struct {
@@ -159,9 +185,16 @@ typedef struct {
   unsigned int gun_driver_heater_voltage;
   
   unsigned int afc_manual_target_position;
+
+  unsigned int scope_a_settings;
+  unsigned int scope_b_settings;
+  unsigned int scope_hv_vmon_settings;
   
 } TYPE_SLAVE_DATA;
+
 static TYPE_SLAVE_DATA slave_data;
+
+
 
 typedef struct {
   unsigned int reset_count;
@@ -651,6 +684,7 @@ void ETMCanSlaveLoadConfiguration(unsigned long agile_id, unsigned int agile_das
 void ETMCanSlaveDoCan(void) {
   ETMCanSlaveProcessMessage();
   ETMCanSlaveTimedTransmit();
+  ETMCanSlaveSendScopeData();
   ETMCanSlaveCheckForTimeOut();
   ETMCanSlaveSendUpdateIfNewNotReady();
 
@@ -695,7 +729,6 @@ void ETMCanSlaveExecuteCMD(ETMCanMessage* message_ptr) {
   unsigned int cmd_id;
   unsigned int eeprom_page_data[16];
   unsigned int eeprom_write_error;
-  unsigned int *ram_ptr;
   unsigned char discrete_cmd_id;
   unsigned int page_to_read;
   unsigned int location;
@@ -828,18 +861,20 @@ void ETMCanSlaveExecuteCMD(ETMCanMessage* message_ptr) {
     
   case ETM_CAN_CMD_ID_SET_RAM_DEBUG:
     if (message_ptr->word3 == can_params.address) {
+      message_ptr->word2 <<= 1;
+      message_ptr->word1 <<= 1;
+      message_ptr->word0 <<= 1;
       if (message_ptr->word2 < RAM_SIZE_WORDS) {
-	ram_ptr = (unsigned int*)message_ptr->word2;
-	etm_can_slave_debug_data.ram_monitor_c = *ram_ptr;
+	ram_ptr_c = (unsigned int*)message_ptr->word2;
       }
       if (message_ptr->word1 < RAM_SIZE_WORDS) {
-	ram_ptr = (unsigned int*)message_ptr->word1;
-	etm_can_slave_debug_data.ram_monitor_b = *ram_ptr;
+	ram_ptr_b = (unsigned int*)message_ptr->word1;
       }
-      if (message_ptr->word1 < RAM_SIZE_WORDS) {
-	ram_ptr = (unsigned int*)message_ptr->word0;
-	etm_can_slave_debug_data.ram_monitor_a = *ram_ptr;
+      if (message_ptr->word0 < RAM_SIZE_WORDS) {
+	ram_ptr_a = (unsigned int*)message_ptr->word0;
       }
+      scope_data_sources[SCOPE_DATA_SELECT_SIZE - 2] = ram_ptr_a;
+      scope_data_sources[SCOPE_DATA_SELECT_SIZE - 1] = ram_ptr_b;
     }
     break;
 
@@ -921,6 +956,36 @@ void ETMCanSlaveExecuteCMD(ETMCanMessage* message_ptr) {
     BufferByte64WriteByte(&discrete_cmd_buffer, discrete_cmd_id);
     break;
 
+  case ETM_CAN_CMD_ID_SCOPE_SETTINGS:
+    // Scope A settings
+    slave_data.scope_a_settings = SCOPE_CHANNEL_DISABLED;
+    slave_data.scope_b_settings = SCOPE_CHANNEL_DISABLED;
+    slave_data.scope_hv_vmon_settings = SCOPE_CHANNEL_DISABLED;
+       
+    if ((message_ptr->word3 >> 8) == can_params.address) {
+      // This board is transmitting scope_a
+      if ((message_ptr->word3 & 0x00FF) < SCOPE_DATA_SELECT_SIZE) {
+	ptr_scope_a_data_source = scope_data_sources[message_ptr->word3 & 0x00FF];
+	slave_data.scope_a_settings = SCOPE_CHANNEL_ACTIVE;
+      }
+    }
+
+    // Scope B settings
+    if ((message_ptr->word2 >> 8) == can_params.address) {
+      // This board is transmitting scope_b
+      if ((message_ptr->word2 & 0x00FF) <= SCOPE_DATA_SELECT_SIZE) {
+	ptr_scope_b_data_source = scope_data_sources[message_ptr->word2 & 0x00FF];
+	slave_data.scope_b_settings = SCOPE_CHANNEL_ACTIVE;
+      }
+    }
+
+    if ((message_ptr->word1 >> 8) == can_params.address) {
+      slave_data.scope_hv_vmon_settings = SCOPE_CHANNEL_ACTIVE;
+    }
+
+    break;
+
+    
   default:
     // DPARKER increment fault counter
     etm_can_slave_debug_data.can_invalid_index++;
@@ -1392,6 +1457,57 @@ void ETMCanSlaveTimedTransmit(void) {
 }
 
 
+static void ETMCanSlaveSendScopeData(void) {
+  static unsigned long etm_can_scope_50ms_holding_var;
+  static unsigned long etm_can_scope_10ms_holding_var;
+  static unsigned int  temp_scope_data_a[4];
+  static unsigned int  temp_scope_data_b[4];
+  static unsigned int  temp_scope_data_location = 0;
+  // Transmit pulse log data once every 50 milliseconds
+
+
+  // If there is pulse scope data to transmit, send it out
+  if (ETMTickRunOnceEveryNMilliseconds(50, &etm_can_scope_50ms_holding_var)) {
+    if (pulse_data_transmit_index < 10) {
+      ETMCanSlaveLogData(ETM_CAN_DATA_LOG_REGISTER_PULSE_SCOPE_DATA,
+			 pulse_data_to_transmit[pulse_data_transmit_index*4 + 3],
+			 pulse_data_to_transmit[pulse_data_transmit_index*4 + 2],
+			 pulse_data_to_transmit[pulse_data_transmit_index*4 + 1],
+			 pulse_data_to_transmit[pulse_data_transmit_index*4 + 0]);
+      pulse_data_transmit_index++;
+    }
+  }
+  
+  if (ETMTickRunOnceEveryNMilliseconds(10, &etm_can_scope_10ms_holding_var)) {
+    // Send out SCOPE DATA
+    
+    // Add another entry into scope a,
+    if (slave_data.scope_a_settings == SCOPE_CHANNEL_ACTIVE) {
+      temp_scope_data_a[temp_scope_data_location] = *ptr_scope_a_data_source;
+      if (temp_scope_data_location == 3) {
+	ETMCanSlaveLogData(ETM_CAN_DATA_LOG_REGISTER_SCOPE_A, temp_scope_data_a[3],
+			   temp_scope_data_a[2], temp_scope_data_a[1], temp_scope_data_a[0]);
+      }
+    }
+
+    // Add another entry into scope b,
+    if (slave_data.scope_b_settings == SCOPE_CHANNEL_ACTIVE) {
+      temp_scope_data_b[temp_scope_data_location] = *ptr_scope_b_data_source;
+      if (temp_scope_data_location == 3) {
+	ETMCanSlaveLogData(ETM_CAN_DATA_LOG_REGISTER_SCOPE_B, temp_scope_data_b[3],
+			   temp_scope_data_b[2], temp_scope_data_b[1], temp_scope_data_b[0]);
+      }
+    }
+
+    temp_scope_data_location++;
+    if (temp_scope_data_location == 4) {
+      temp_scope_data_location = 0;
+    }
+  }
+}
+
+
+
 void ETMCanSlaveSendStatus(void) {
   ETMCanMessage message;
   message.identifier = ETM_CAN_MSG_STATUS_TX | (can_params.address << 2);
@@ -1663,32 +1779,6 @@ unsigned char ETMCanSlaveGetPulseCount(void) {
   return (etm_can_slave_sync_message.pulse_count);
 }
 
-
-// DPARKER - Remove this function
-unsigned int ETMCanSlaveGetPulseLevelAndCount(void) {
-  unsigned int  return_value;
-  
-  // Disable the Can Interrupt
-  _C1IE = 0;
-  _C2IE = 0;
-
-  return_value = etm_can_slave_sync_message.next_energy_level;
-  return_value <<=8;
-  return_value |= etm_can_slave_sync_message.pulse_count;
-  
-  // Reenable the relevant can interrupt
-  if (CXEC_ptr == &C1EC) {
-    // We are using CAN1.
-    _C1IE = 1;
-  } else {
-    _C2IE = 1;
-  }
-  
-  last_return_value_level_high_word_count_low_word = return_value;
-  return return_value;
-}
-
-
 unsigned int ETMCanSlaveGetSetting(unsigned char setting_select) {
   unsigned int *data_ptr;
   data_ptr = (unsigned int*)&slave_data;
@@ -1723,9 +1813,9 @@ void DoCanInterrupt(void) {
       etm_can_slave_debug_data.can_rx_0_filt_0++;
       ETMCanRXMessage(&can_message, CXRX0CON_ptr);
       *(unsigned int*)&etm_can_slave_sync_message.sync_0_control_word = can_message.word0;
-      *(unsigned int*)&etm_can_slave_sync_message.pulse_count = can_message.word1;       // DPARKER CONFIRM THAT THIS ASSIGNMENT IS ALIGNED PROPERLY
+      *(unsigned int*)&etm_can_slave_sync_message.pulse_count = can_message.word1;
       etm_can_slave_sync_message.prf_from_ecb = can_message.word2;
-      *(unsigned int*)&etm_can_slave_sync_message.scope_A_select = can_message.word3;    // DPARKER CONFIRM THAT THIS ASSIGNMENT IS ALIGNED PROPERLY
+      *(unsigned int*)&etm_can_slave_sync_message.scope_A_select = can_message.word3;
       ClrWdt();
       etm_can_slave_com_loss = 0;
       etm_can_slave_communication_timeout_holding_var = ETMTickGet();
@@ -1772,4 +1862,85 @@ void DoCanInterrupt(void) {
       ETMSetPin(can_params.led);
     }
   }
+}
+
+
+
+
+
+void ETMCanSlaveLogHVVmonData(unsigned int sp4, unsigned int sp3, unsigned int sp2, unsigned int sp1, unsigned int sp0) {
+  unsigned int data3;
+  unsigned int data2;
+  unsigned int data1;
+  unsigned int data0;
+
+  if (slave_data.scope_hv_vmon_settings == SCOPE_CHANNEL_ACTIVE) {
+    data0  = sp0 & 0xFFF;
+    data0 |= ((sp1 << 12) & 0xF000);
+    
+    data1  = (sp1 >> 4) & 0xFF;
+    data1 |= ((sp2 <<8) & 0xFF00);
+    
+    data2  = (sp2>>8) & 0xF;
+    data2 |= (sp3 << 4) & 0xFFF0;
+    
+    data3  = sp4 & 0xFFF;
+
+    ETMCanSlaveLogData(ETM_CAN_DATA_LOG_REGISTER_HV_VMON_DATA, data3, data2, data1, data0);
+  }
+}
+
+void ETMCanSlaveLogPulseCurrent(TYPE_PULSE_DATA *pulse_data) {
+  static unsigned long start_tick;
+  unsigned int send_this_pulse;
+
+  send_this_pulse = 0;
+  if (ETMTickGreaterThanNMilliseconds(1000, start_tick)) {
+    // It has been at least 1 second since the last time a pulse was logged.
+    send_this_pulse = 1;
+  }
+  
+  if (pulse_data->arc_this_pulse) {
+    //send_this_pulse = 1;
+  }
+  if (send_this_pulse) {
+    pulse_data_transmit_index = 0;
+    Compact12BitInto16Bit(&pulse_data_to_transmit[0], &pulse_data->data[0], 0);
+    Compact12BitInto16Bit(&pulse_data_to_transmit[4], &pulse_data->data[5], 1);
+    Compact12BitInto16Bit(&pulse_data_to_transmit[8], &pulse_data->data[10], 2);
+    Compact12BitInto16Bit(&pulse_data_to_transmit[12], &pulse_data->data[15], 3);
+    Compact12BitInto16Bit(&pulse_data_to_transmit[16], &pulse_data->data[20], 4);
+    Compact12BitInto16Bit(&pulse_data_to_transmit[20], &pulse_data->data[25], 5);
+    Compact12BitInto16Bit(&pulse_data_to_transmit[24], &pulse_data->data[30], 6);
+    Compact12BitInto16Bit(&pulse_data_to_transmit[28], &pulse_data->data[35], 7);
+    Compact12BitInto16Bit(&pulse_data_to_transmit[32], &pulse_data->data[40], 8);
+    Compact12BitInto16Bit(&pulse_data_to_transmit[36], &pulse_data->data[45], 9);
+    start_tick = ETMTickGet();
+  }
+}
+
+
+void ETMCanSlaveSetScopeDataAddress(unsigned int scope_channel, unsigned int *data_address) {
+  if (scope_channel >= SCOPE_DATA_SELECT_SIZE) {
+    // Not a valid scope channel
+    return;
+  }
+  scope_data_sources[scope_channel] = data_address;
+}
+
+
+void Compact12BitInto16Bit(unsigned int *transmit_data, unsigned int *source_data, unsigned int count) {
+  // Compacts 5 16 bit numbers (assuming 12bit) int 4
+
+  transmit_data[0]  = source_data[0] & 0xFFF;
+  transmit_data[0] |= ((source_data[1] << 12) & 0xF000);
+
+  transmit_data[1]  = (source_data[1] >> 4) & 0xFF;
+  transmit_data[1] |= ((source_data[2] <<8) & 0xFF00);
+
+  transmit_data[2]  = (source_data[2]>>8) & 0xF;
+  transmit_data[2] |= (source_data[3] << 4) & 0xFFF0;
+
+  transmit_data[3]  = source_data[4] & 0xFFF;
+  transmit_data[3] |= (count & 0x000F) << 12;
 }
