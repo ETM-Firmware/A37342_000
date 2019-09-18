@@ -436,9 +436,21 @@ unsigned int ETMCanBufferNotEmpty(ETMCanMessageBuffer* buffer_ptr);
 #define CXTXXDLC_VALUE                           0b0000000011000000
 
 
-// ------------ SLAVE BOARD CONFIGURATION ------------ //
-#define SLAVE_TRANSMIT_MILLISECONDS       100
-#define SLAVE_TIMEOUT_MILLISECONDS        250
+// ------------ CAN MODULE TIMING SPECIFICATIONS ------------ //
+
+// SLAVE PARAMETERS
+#define SLAVE_TRANSMIT_MILLISECONDS            100  // Period to send Status Message and one Debug data message
+#define SLAVE_TIMEOUT_MILLISECONDS             250  // Slave communication timemout, receiving sync message from ECB
+
+// MASTER PARAMETERS
+#define SYNC_MESSAGE_MAX_TRANSMISSION_PERIOD                    50  // 50mS.  If a sync message has not been sent by user code (following a trigger or change in sync control bits) one will be sent by the can master module
+#define UPDATE_SLAVE_TIMEOUT_CHECK_PERIOD_MILLISECONDS          100 // 100ms.  Checks for slave timeouts this often
+#define ETM_CAN_MASTER_TIMED_TRANSMISSION_PERIOD_MILLI_SECONDS  100 // Time between updates to a slave board.  There are 7 update messages so max 700mS to update all the parameters
+#define ETM_CAN_MASTER_SLAVE_TIMEOUT_MILLI_SECONDS              300 // Slave will timeout after this time without a status message
+
+
+
+
 
 
 //------------------------------- Specific Board and Command Defines -------------------------- // 
