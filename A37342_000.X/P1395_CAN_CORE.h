@@ -397,7 +397,7 @@ unsigned int ETMCanBufferNotEmpty(ETMCanMessageBuffer* buffer_ptr);
 
 
 
-#define CXCFG2_VALUE                             0b0000001110010001      // This will created a bit timing of 10x TQ
+//#define CXCFG2_VALUE                             0b0000001110010001      // This will created a bit timing of 10x TQ
 /*
   Can Bit Timing
   Syncchronization segment     - 1xTq
@@ -409,7 +409,7 @@ unsigned int ETMCanBufferNotEmpty(ETMCanMessageBuffer* buffer_ptr);
 
 */
 
-//#define CXCFG2_VALUE                             0b0000001110011010      // This will created a bit timing of 12x TQ
+#define CXCFG2_VALUE                             0b0000001110011010      // This will created a bit timing of 12x TQ
 /*
   Can Bit Timing
   Syncchronization segment     - 1xTq
