@@ -1,16 +1,10 @@
 #ifndef __P1395_CAN_SLAVE_PUBLIC_H
 #define __P1395_CAN_SLAVE_PUBLIC_H
 
-#include "P1395_CAN_CORE.h"
 #include "P1395_CAN_CORE_PUBLIC.h"
 
 
 #define P1395_CAN_SLAVE_VERSION   0x0310
-
-
-extern ETMCanBoardData           slave_board_data;            // This contains information that is always mirrored on ECB
-
-
 
 
 //------------ SLAVE PUBLIC FUNCTIONS AND VARIABLES ------------------- //
@@ -27,20 +21,7 @@ typedef struct {
 } TYPE_PULSE_DATA;
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+extern ETMCanBoardData           slave_board_data;            // This contains information that is always mirrored on ECB
 
 
 //------------ SLAVE PUBLIC FUNCTIONS AND VARIABLES ------------------- //
@@ -71,72 +52,25 @@ void ETMCanSlaveDoCan(void);
   3) Send out regularly schedule communication (On slaves this is status update and logging data)
 */
 
+
 unsigned char ETMCanSlaveGetDiscreteCMD(void);
 /*
   Returns the next discrete command id to be executed.
   If there are no commands, will return 0.
 */
 
-
-void ETMCanSlaveLogPulseData(unsigned int pulse_count, unsigned int log_data_1, unsigned int log_data_0);
-/*
-  This is used to log pulse by pulse data
-  
-  If the pulse count is even, the data will be saved.
-  If the pusle count is odd, the the data will be sent out
-*/
-
-
-
-void ETMCanSlaveTriggerRecieved(void);
-/*
-  Call this once after a trigger to automatically update pulse and level based on the mode of operation.
-  That way if a sync_level command the system will automatically pulse at the correct level on the next trigger.
-*/
-
-
-
-unsigned char ETMCanSlaveGetPulseLevel(void);
-unsigned char ETMCanSlaveGetPulseCount(void);
-
-
-
-#define DOSE_SELECT_DOSE_LEVEL_0           0x1
-#define DOSE_SELECT_DOSE_LEVEL_1           0x2
-#define DOSE_SELECT_DOSE_LEVEL_2           0x3
-#define DOSE_SELECT_DOSE_LEVEL_3           0x4
-
-
-void ETMCanSlaveSetLogDataRegister(unsigned int log_register, unsigned int data_for_log);
-/*
-  There are 24 logging registers, 0x00->0x17
-  This stores the value to a particular data log register
-  This information is available on the GUI and is used to display the system parameters
-*/
-
-
-void ETMCanSlaveSetDebugRegister(unsigned int debug_register, unsigned int debug_value);
-/*
-  There are 16 debug registers, 0x0->0xF
-  This stores the value to a particular register
-  This information is available on the GUI and should be used to display real time inforamtion to help in debugging.
-*/
-
-
-void ETMCanSlaveSetDebugData(unsigned int debug_data_register, unsigned debug_value);
-/*
-  There are 16 debug registers, 0x0->0xF
-  This stores the value to a particular register
-  This information is available on the GUI and should be used to display real time inforamtion to help in debugging.
-  These can be freely assigned by the developer as needed
-*/
-
-
 unsigned int ETMCanSlaveGetComFaultStatus(void);
 /*
   Returns 0 if communication with the ECB is normal
   Returns 1 if the communication with the ECB has timed out
   On com fault all boards should inhibit triggering and shut down to a safe level
+*/
+
+
+// ------------- SYNC MESSAGE COMMANDS ------------------ //
+unsigned int ETMCanSlaveGetSyncMsgResetEnable(void); // DPARKER CHANGE HOW THIS OPERATES
+/*
+  returns 0xFFFF if reset is active, 0 otherwise
 */
 
 unsigned int ETMCanSlaveGetSyncMsgHighSpeedLogging(void);
@@ -162,35 +96,64 @@ unsigned int ETMCanSlaveGetSyncMsgGunDriverDisableHeater(void);
   the gun driver should shut down the heater (and everything else it needs to safely) on this
 */
 
-unsigned int ETMCanSlaveGetSyncMsgScopeHVVmonEnabled(void);
 unsigned int ETMCanSlaveGetSyncMsgEnableFaultIgnore(void);
+/*
+  DPARKER WORK ON THE FAULT IGNORE FUNCTIONALITY
+*/
+
+unsigned char ETMCanSlaveGetPulseLevel(void);
+/*
+  Returns the dose level of the next pulse
+  This is not exactly what is in the sync message because the sync message also contains interleaving information.
+*/
+
+#define DOSE_SELECT_DOSE_LEVEL_0           0x1
+#define DOSE_SELECT_DOSE_LEVEL_1           0x2
+#define DOSE_SELECT_DOSE_LEVEL_2           0x3
+#define DOSE_SELECT_DOSE_LEVEL_3           0x4
+
+unsigned char ETMCanSlaveGetPulseCount(void);
+/*
+  Returns the count from the sync message
+*/
+
+void ETMCanSlaveTriggerRecieved(void);
+/*
+  Call this once after a trigger to automatically update pulse count and level based on the mode of operation.
+  That way if a sync_level command is missed the system will still pulse at the correct level on the next trigger.
+*/
 
 
-unsigned int ETMCanSlaveGetSyncMsgResetEnable(void); // DPARKER CHANGE HOW THIS OPERATES
-unsigned int ETMCanSlaveGetSyncMsgClearDebug(void); // DPARKER CHANGE THIS TO BE A COMMAND INSTEAD OF Status bit
+// ------------ SCOPE / DATA LOGGING FUNCTIONS ----------------------- //
+void ETMCanSlaveSetLogDataRegister(unsigned int log_register, unsigned int data_for_log);
+/*
+  There are 24 logging registers, 0x00->0x17
+  This stores the value to a particular data log register
+  This information is available on the GUI and is used to display the system parameters
+*/
 
 
+void ETMCanSlaveSetDebugRegister(unsigned int debug_register, unsigned int debug_value);
+/*
+  There are 16 debug registers, 0x0->0xF
+  This stores the value to a particular register
+  This information is available on the GUI and should be used to display real time inforamtion to help in debugging.
+*/
 
 
-// ------------ SCOPE SETTINGS ----------------------- //
-
-void ETMCanSlaveLogPulseByPulseData(unsigned int word3, unsigned int word2, unsigned int word1, unsigned int word0);
+void ETMCanSlaveLogPulseData(unsigned int pulse_count, unsigned int log_data_1, unsigned int log_data_0);
 /*
   This is used to log pulse by pulse data
+  
+  If the pulse count is even, the data will be saved.
+  If the pusle count is odd, the the data will be sent out
 */
+
 
 void ETMCanSlaveLogPulseCurrent(TYPE_PULSE_DATA *pulse_data);
 /*
   This is used to log magnetron or target current for a particular pulse
   The Can module can not save every sample, so it will decide which data to save
-*/
-
-unsigned int ETMCanSlaveGetHVVmonScopeSelected(void);
-/*
-  If HV Vmon is requested from this board, returns HV_SCOPE_SELECTED, otherwise returns NO_SCOPE_SELECTED 
-
-  DPARKER, when would this be used?  Aren't the boards that are sampling HV output already sampling all the time
-  They are just not sending the data and the can module handles this
 */
 
 void ETMCanSlaveSetScopeDataAddress(unsigned int scope_channel, unsigned int *data_address);
@@ -205,14 +168,10 @@ void ETMCanSlaveLogHVVmonData(unsigned int sp4, unsigned int sp3, unsigned int s
   This will compress the 5 12 bit readings sp0 -> sp4 into 4 words and send the data to the ECB.
 */
 
-
-
-
-
-
-
-
 unsigned int ETMCanSlaveGetSetting(unsigned char setting_select);
+/*
+  Returns the dose settings specified below
+*/
 #define HVPS_SET_POINT_DOSE_3                        0
 #define HVPS_SET_POINT_DOSE_2                        1
 #define HVPS_SET_POINT_DOSE_1                        2
@@ -246,15 +205,6 @@ unsigned int ETMCanSlaveGetSetting(unsigned char setting_select);
 #define AFC_MANUAL_TARGET_POSTION                    24
 #define SYSTEM_CONFIGURATION_SELECT                  25
 
-
-
-
-
-/*
-  All of these 
-  will return 0xFFFF if the corresponding bit is set in the sync Message
-  will return 0x0000 otherwise
-*/
 
 
 // --------------------------- #defines to access the status register --------------------------- //
@@ -388,13 +338,6 @@ unsigned int ETMCanSlaveGetSetting(unsigned char setting_select);
 #define _FAULT_REGISTER               *(unsigned int*)&slave_board_data.status.fault_bits
 #define _WARNING_REGISTER             *(unsigned int*)&slave_board_data.status.warning_bits
 #define _NOT_LOGGED_REGISTER          *(unsigned int*)&slave_board_data.status.not_logged_bits
-
-// ------------------------- #defines to access the board log and configuration data -------------------------------- //
-/*
-  24 Words of board data
-  8  Words of board configuration
-*/
-
 
 
 #endif

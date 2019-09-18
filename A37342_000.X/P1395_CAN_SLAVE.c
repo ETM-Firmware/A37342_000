@@ -1,34 +1,11 @@
 #include <xc.h>
 #include <libpic30.h>
+#include "P1395_CAN_CORE.h"
 #include "P1395_CAN_SLAVE.h"
 #include "ETM.h"
 
 
-
-unsigned int pulse_data_transmit_index = 0xFF00;
-unsigned int pulse_data_to_transmit[40];
-
-
-
-// GLOBAL VARIABLES
-ETMCanBoardData           slave_board_data;            // This contains information that is always mirrored on ECB
-
-
-unsigned int ETMEEPromPrivateReadSinglePage(unsigned int page_number, unsigned int *page_data);
-// From ETM_EEPROM - this module only needs access to this fuction
-
-// DOSE LEVEL DEFINITIONS
-
-#define DOSE_SELECT_REPEATE_DOSE_LEVEL_0           0x11
-#define DOSE_SELECT_REPEATE_DOSE_LEVEL_1           0x12
-#define DOSE_SELECT_REPEATE_DOSE_LEVEL_2           0x13
-#define DOSE_SELECT_REPEATE_DOSE_LEVEL_3           0x14
-
-#define DOSE_SELECT_INTERLEAVE_0_1_DOSE_LEVEL_0    0x21
-#define DOSE_SELECT_INTERLEAVE_0_1_DOSE_LEVEL_1    0x22
-#define DOSE_SELECT_INTERLEAVE_2_3_DOSE_LEVEL_2    0x23
-#define DOSE_SELECT_INTERLEAVE_2_3_DOSE_LEVEL_3    0x24
-
+// -------- LOG REGISTER LOCAL DEFINES ------------------ //
 
 #define ETM_CAN_DATA_LOG_REGISTER_BOARD_SPECIFIC_0               0x100
 #define ETM_CAN_DATA_LOG_REGISTER_BOARD_SPECIFIC_1               0x110
@@ -39,10 +16,11 @@ unsigned int ETMEEPromPrivateReadSinglePage(unsigned int page_number, unsigned i
 #define ETM_CAN_DATA_LOG_REGISTER_CONFIG_0                       0x160
 #define ETM_CAN_DATA_LOG_REGISTER_CONFIG_1                       0x170
 
-#define ETM_CAN_DATA_LOG_REGISTER_SCOPE_A                        0x180
-#define ETM_CAN_DATA_LOG_REGISTER_SCOPE_B                        0x190
-#define ETM_CAN_DATA_LOG_REGISTER_PULSE_SCOPE_DATA               0x1A0
-#define ETM_CAN_DATA_LOG_REGISTER_HV_VMON_DATA                   0x1B0
+// Defines in ETM_CAN_CORE.H because the Master needs these as well
+//#define ETM_CAN_DATA_LOG_REGISTER_SCOPE_A                        0x180
+//#define ETM_CAN_DATA_LOG_REGISTER_SCOPE_B                        0x190
+//#define ETM_CAN_DATA_LOG_REGISTER_PULSE_SCOPE_DATA               0x1A0
+//#define ETM_CAN_DATA_LOG_REGISTER_HV_VMON_DATA                   0x1B0
 
 #define ETM_CAN_DATA_LOG_REGISTER_DEFAULT_DEBUG_0                0x1C0
 #define ETM_CAN_DATA_LOG_REGISTER_DEFAULT_DEBUG_1                0x1D0
@@ -79,8 +57,13 @@ unsigned int ETMEEPromPrivateReadSinglePage(unsigned int page_number, unsigned i
 #define ETM_CAN_DATA_LOG_REGISTER_CALIBRATION_7                  0x370
 
 
-#define SLAVE_TRANSMIT_MILLISECONDS       100
-#define SLAVE_TIMEOUT_MILLISECONDS        250
+// SLAVE EEPROM REGISTER LOCATIONS
+#define EEPROM_PAGE_BOARD_CONFIGURATION                          0x00
+#define EEPROM_TEST_PAGE                                         0x03
+#define EEPROM_PAGE_ANALOG_CALIBRATION_0_1_2                     0x04
+#define EEPROM_PAGE_ANALOG_CALIBRATION_3_4_5                     0x05
+#define EEPROM_PAGE_ANALOG_CALIBRATION_6_7                       0x06
+
 
 #define SCOPE_CHANNEL_DISABLED  0
 #define SCOPE_CHANNEL_ACTIVE    1
@@ -89,6 +72,7 @@ unsigned int ETMEEPromPrivateReadSinglePage(unsigned int page_number, unsigned i
 #define LOG_DEFAULT_VALUE_SLAVE_ALT 0xFFCF
 
 
+// ------------- RAM SIZE CONFIGURATION FOR DIRECT GUI MEMORY ACCESS ---------------- //
 #if defined(__dsPIC30F6014A__)
 #define RAM_SIZE_WORDS  4096
 #endif
@@ -103,13 +87,11 @@ unsigned int ETMEEPromPrivateReadSinglePage(unsigned int page_number, unsigned i
 
 
 
-#define EEPROM_PAGE_ANALOG_CALIBRATION_0_1_2   0x04
-#define EEPROM_PAGE_ANALOG_CALIBRATION_3_4_5   0x05
-#define EEPROM_PAGE_ANALOG_CALIBRATION_6_7     0x06
-#define EEPROM_PAGE_BOARD_CONFIGURATION        0x00
-#define EEPROM_TEST_PAGE                       0x03
+// GLOBAL VARIABLES
+ETMCanBoardData           slave_board_data;             // This contains information that is always mirrored on ECB
 
-
+static unsigned int pulse_data_to_transmit[40];         // This is pulse data (magnetron or target current) that has been formated
+static unsigned int pulse_data_transmit_index = 0xFF00; // This is is used to time the transfer of pulse data
 
 
 //Local Funcations
@@ -140,7 +122,6 @@ static unsigned long etm_can_slave_communication_timeout_holding_var;  // Used t
 static unsigned char etm_can_slave_com_loss;  // Keeps track of if communicantion from ECB has timed out
 static unsigned int setting_data_recieved;  // This keeps track of which settings registers have been recieved 
 static BUFFERBYTE64 discrete_cmd_buffer;  // Buffer for discrete commands that come in.  This is quiered and processed by the main code as needed
-
 
 
 #define SCOPE_DATA_SELECT_SIZE         16
@@ -211,6 +192,7 @@ typedef struct {
   unsigned long not_ready_led;
   
 } TYPE_CAN_PARAMETERS;
+
 static TYPE_CAN_PARAMETERS can_params;
 
 
@@ -262,8 +244,8 @@ void ETMCanSlaveInitialize(unsigned int requested_can_port, unsigned long fcy, u
   etm_can_slave_sync_message.pulse_count = 0;
   etm_can_slave_sync_message.next_energy_level = 0;
   etm_can_slave_sync_message.prf_from_ecb = 0;
-  etm_can_slave_sync_message.scope_A_select = 0;
-  etm_can_slave_sync_message.scope_B_select = 0;
+  etm_can_slave_sync_message.unused_A = 0;
+  etm_can_slave_sync_message.unused_B = 0;
   
   
   
@@ -665,6 +647,7 @@ void ETMCanSlaveInitialize(unsigned int requested_can_port, unsigned long fcy, u
   _TRISF8 = 0;
 }
 
+
 void ETMCanSlaveLoadConfiguration(unsigned long agile_id, unsigned int agile_dash,
 				  unsigned int firmware_agile_rev, unsigned int firmware_branch, 
 				  unsigned int firmware_branch_rev) {
@@ -677,7 +660,6 @@ void ETMCanSlaveLoadConfiguration(unsigned long agile_id, unsigned int agile_das
   slave_board_data.device_firmware_rev_agile = firmware_agile_rev;
   slave_board_data.device_firmware_branch = firmware_branch;
   slave_board_data.device_firmware_branch_rev = firmware_branch_rev;
-
 }
 
 
@@ -710,6 +692,246 @@ unsigned char ETMCanSlaveGetDiscreteCMD(void) {
     return BufferByte64ReadByte(&discrete_cmd_buffer);
   }
   return 0;
+}
+
+
+unsigned int ETMCanSlaveGetComFaultStatus(void) {
+  return etm_can_slave_com_loss;
+}
+
+
+// DPARKER CONSIDER CHANGING HOW RESET ENABLE WORKS, POSSIBLY PART OF REWORK OF FAULT VISABILITY
+unsigned int ETMCanSlaveGetSyncMsgResetEnable(void) {
+  if (etm_can_slave_sync_message.sync_0_control_word.sync_0_reset_enable) {
+    return 0xFFFF;
+  } else {
+    return 0;
+  }
+}
+
+
+unsigned int ETMCanSlaveGetSyncMsgHighSpeedLogging(void) {
+  if (etm_can_slave_sync_message.sync_0_control_word.sync_1_high_speed_logging_enabled) {
+    return 0xFFFF;
+  } else {
+    return 0;
+  }
+}
+
+
+unsigned int ETMCanSlaveGetSyncMsgCoolingFault(void) {
+  if (etm_can_slave_sync_message.sync_0_control_word.sync_4_cooling_fault) {
+    return 0xFFFF;
+  } else {
+    return 0;
+  }
+}
+
+
+unsigned int ETMCanSlaveGetSyncMsgSystemHVDisable(void) {
+  if (etm_can_slave_sync_message.sync_0_control_word.sync_5_system_hv_disable) {
+    return 0xFFFF;
+  } else {
+    return 0;
+  }
+}
+
+
+unsigned int ETMCanSlaveGetSyncMsgGunDriverDisableHeater(void) {
+  if (etm_can_slave_sync_message.sync_0_control_word.sync_6_gun_driver_disable_heater) {
+    return 0xFFFF;
+  } else {
+    return 0;
+  }
+}
+
+
+unsigned int ETMCanSlaveGetSyncMsgEnableFaultIgnore(void) {
+  if (etm_can_slave_sync_message.sync_0_control_word.sync_E_ingnore_faults_enabled) {
+    return 0xFFFF;
+  } else {
+    return 0;
+  }
+  // DPARKER WORK ON FAULT IGNORE
+
+}
+
+
+unsigned char ETMCanSlaveGetPulseLevel(void) {
+  return (etm_can_slave_sync_message.next_energy_level & 0x0F);
+}
+
+
+unsigned char ETMCanSlaveGetPulseCount(void) {
+  return (etm_can_slave_sync_message.pulse_count);
+}
+
+// DPARKER WHAT IS GOING ON HERE??HOW IS THIS WORKING???
+unsigned int last_return_value_level_high_word_count_low_word;  // Pulse Level High Word, Pulse Count Low Word
+
+void ETMCanSlaveTriggerRecieved(void) {
+  // Does the slave need to send anything out or just update the next energy level
+  unsigned char last_pulse_count;
+  last_pulse_count = last_return_value_level_high_word_count_low_word;
+
+  // Disable the Can Interrupt
+  _C1IE = 0;
+  _C2IE = 0;
+  
+  if (last_pulse_count == etm_can_slave_sync_message.pulse_count) {
+    // we have not recieved a new sync message yet
+    // Update pulse_count and pulse_level with the next expected value
+    // Check to see if we are in interleave mode
+
+    etm_can_slave_sync_message.pulse_count = (last_pulse_count + 1);
+    switch (etm_can_slave_sync_message.next_energy_level)
+      {
+      
+      case DOSE_SELECT_INTERLEAVE_0_1_DOSE_LEVEL_0:
+	etm_can_slave_sync_message.next_energy_level = DOSE_SELECT_INTERLEAVE_0_1_DOSE_LEVEL_1;
+	break;
+	
+      case DOSE_SELECT_INTERLEAVE_0_1_DOSE_LEVEL_1:
+	etm_can_slave_sync_message.next_energy_level = DOSE_SELECT_INTERLEAVE_0_1_DOSE_LEVEL_0;
+	break;
+	
+      case DOSE_SELECT_INTERLEAVE_2_3_DOSE_LEVEL_2:
+	etm_can_slave_sync_message.next_energy_level = DOSE_SELECT_INTERLEAVE_2_3_DOSE_LEVEL_3;
+	break;
+	
+      case DOSE_SELECT_INTERLEAVE_2_3_DOSE_LEVEL_3:
+	etm_can_slave_sync_message.next_energy_level = DOSE_SELECT_INTERLEAVE_2_3_DOSE_LEVEL_2;
+	break;
+	
+      default:
+	// Don't change the pulse level because we aren't in interleaved mode
+	break;
+      }
+  }
+
+  // Reenable the relevant can interrupt
+  if (CXEC_ptr == &C1EC) {
+    // We are using CAN1.
+    _C1IE = 1;
+  } else {
+    _C2IE = 1;
+  }
+}
+
+
+void ETMCanSlaveSetLogDataRegister(unsigned int log_register, unsigned int data_for_log) {
+  if (log_register > 0x0017) {
+    return;
+  }
+  slave_board_data.log_data[log_register] = data_for_log;
+}
+
+
+void ETMCanSlaveSetDebugRegister(unsigned int debug_register, unsigned int debug_value) {
+  if (debug_register > 0x000F) {
+    return;
+  }
+  etm_can_slave_debug_data.debug_reg[debug_register] = debug_value;
+}
+
+
+void ETMCanSlaveLogPulseData(unsigned int pulse_count, unsigned int log_data_1, unsigned int log_data_0) {
+  static unsigned int data_word_3;
+  static unsigned int data_word_2;
+  static unsigned int previous_pulse_count;
+  
+  if ((pulse_count & 0x0001) == 0) {
+    // this is an even number pulse count, store the data
+    data_word_3 = log_data_1;
+    data_word_2 = log_data_0;
+    previous_pulse_count = pulse_count;
+    return;
+  }
+  // This is an odd pulse count, send out the data
+
+  if (previous_pulse_count != (pulse_count & 0xFFFE)) {
+    data_word_3 = LOG_DEFAULT_VALUE_SLAVE_ALT;
+    data_word_2 = LOG_DEFAULT_VALUE_SLAVE_ALT;
+  }
+  
+  pulse_count >>= 1;
+  pulse_count &= 0x000F;
+  pulse_count <<= 4;
+  ETMCanSlaveLogData(pulse_count, data_word_3, data_word_2, log_data_1, log_data_0);
+
+  data_word_3 = LOG_DEFAULT_VALUE_SLAVE;
+  data_word_2 = LOG_DEFAULT_VALUE_SLAVE;
+}
+
+
+
+void ETMCanSlaveLogPulseCurrent(TYPE_PULSE_DATA *pulse_data) {
+  static unsigned long start_tick;
+  unsigned int send_this_pulse;
+
+  send_this_pulse = 0;
+  if (ETMTickGreaterThanNMilliseconds(1000, start_tick)) {
+    // It has been at least 1 second since the last time a pulse was logged.
+    send_this_pulse = 1;
+  }
+  
+  if (pulse_data->arc_this_pulse) {
+    //send_this_pulse = 1;
+  }
+  if (send_this_pulse) {
+    pulse_data_transmit_index = 0;
+    Compact12BitInto16Bit(&pulse_data_to_transmit[0], &pulse_data->data[0], 0);
+    Compact12BitInto16Bit(&pulse_data_to_transmit[4], &pulse_data->data[5], 1);
+    Compact12BitInto16Bit(&pulse_data_to_transmit[8], &pulse_data->data[10], 2);
+    Compact12BitInto16Bit(&pulse_data_to_transmit[12], &pulse_data->data[15], 3);
+    Compact12BitInto16Bit(&pulse_data_to_transmit[16], &pulse_data->data[20], 4);
+    Compact12BitInto16Bit(&pulse_data_to_transmit[20], &pulse_data->data[25], 5);
+    Compact12BitInto16Bit(&pulse_data_to_transmit[24], &pulse_data->data[30], 6);
+    Compact12BitInto16Bit(&pulse_data_to_transmit[28], &pulse_data->data[35], 7);
+    Compact12BitInto16Bit(&pulse_data_to_transmit[32], &pulse_data->data[40], 8);
+    Compact12BitInto16Bit(&pulse_data_to_transmit[36], &pulse_data->data[45], 9);
+    start_tick = ETMTickGet();
+  }
+}
+
+
+void ETMCanSlaveSetScopeDataAddress(unsigned int scope_channel, unsigned int *data_address) {
+  if (scope_channel >= SCOPE_DATA_SELECT_SIZE) {
+    // Not a valid scope channel
+    return;
+  }
+  scope_data_sources[scope_channel] = data_address;
+}
+
+
+void ETMCanSlaveLogHVVmonData(unsigned int sp4, unsigned int sp3, unsigned int sp2, unsigned int sp1, unsigned int sp0) {
+  unsigned int data3;
+  unsigned int data2;
+  unsigned int data1;
+  unsigned int data0;
+
+  if (slave_data.scope_hv_vmon_settings == SCOPE_CHANNEL_ACTIVE) {
+    data0  = sp0 & 0xFFF;
+    data0 |= ((sp1 << 12) & 0xF000);
+    
+    data1  = (sp1 >> 4) & 0xFF;
+    data1 |= ((sp2 <<8) & 0xFF00);
+    
+    data2  = (sp2>>8) & 0xF;
+    data2 |= (sp3 << 4) & 0xFFF0;
+    
+    data3  = sp4 & 0xFFF;
+
+    ETMCanSlaveLogData(ETM_CAN_DATA_LOG_REGISTER_HV_VMON_DATA, data3, data2, data1, data0);
+  }
+}
+
+
+unsigned int ETMCanSlaveGetSetting(unsigned char setting_select) {
+  unsigned int *data_ptr;
+  data_ptr = (unsigned int*)&slave_data;
+  data_ptr += setting_select;
+  return *data_ptr;
 }
 
 
@@ -995,118 +1217,6 @@ void ETMCanSlaveExecuteCMD(ETMCanMessage* message_ptr) {
 
   if (setting_data_recieved == 0b01111111) {
     _CONTROL_NOT_CONFIGURED = 0;
-  }
-}
-
-
-void ETMCanSlaveLoadDefaultCalibration(void) {
-  unsigned int eeprom_page_data[16];
-  unsigned int write_error;
-  eeprom_page_data[0] = ETM_ANALOG_CALIBRATION_SCALE_1;
-  eeprom_page_data[1] = ETM_ANALOG_OFFSET_ZERO;
-  eeprom_page_data[2] = ETM_ANALOG_CALIBRATION_SCALE_1;
-  eeprom_page_data[3] = ETM_ANALOG_OFFSET_ZERO;
-
-  eeprom_page_data[4] = ETM_ANALOG_CALIBRATION_SCALE_1;
-  eeprom_page_data[5] = ETM_ANALOG_OFFSET_ZERO;
-  eeprom_page_data[6] = ETM_ANALOG_CALIBRATION_SCALE_1;
-  eeprom_page_data[7] = ETM_ANALOG_OFFSET_ZERO;
-  
-  eeprom_page_data[8] = ETM_ANALOG_CALIBRATION_SCALE_1;
-  eeprom_page_data[9] = ETM_ANALOG_OFFSET_ZERO;
-  eeprom_page_data[10] = ETM_ANALOG_CALIBRATION_SCALE_1;
-  eeprom_page_data[11] = ETM_ANALOG_OFFSET_ZERO;
-
-  eeprom_page_data[12] = 0;
-  eeprom_page_data[13] = 0;
-  eeprom_page_data[14] = 0;
-
-  write_error = 0xFFFF;
-  write_error &= ETMEEPromWritePageWithConfirmation(EEPROM_PAGE_ANALOG_CALIBRATION_0_1_2 ,&eeprom_page_data[0]);
-  if (write_error != 0xFFFF) {
-    can_params.eeprom_calibration_write_error = 1;
-  } else {
-    etm_can_slave_debug_data.calibration_0_internal_gain   = eeprom_page_data[0];
-    etm_can_slave_debug_data.calibration_0_internal_offset = eeprom_page_data[1];
-    etm_can_slave_debug_data.calibration_0_external_gain   = eeprom_page_data[2];
-    etm_can_slave_debug_data.calibration_0_external_offset = eeprom_page_data[3];
-
-    etm_can_slave_debug_data.calibration_1_internal_gain   = eeprom_page_data[4];
-    etm_can_slave_debug_data.calibration_1_internal_offset = eeprom_page_data[5];
-    etm_can_slave_debug_data.calibration_1_external_gain   = eeprom_page_data[6];
-    etm_can_slave_debug_data.calibration_1_external_offset = eeprom_page_data[7];
-
-    etm_can_slave_debug_data.calibration_2_internal_gain   = eeprom_page_data[8];
-    etm_can_slave_debug_data.calibration_2_internal_offset = eeprom_page_data[9];
-    etm_can_slave_debug_data.calibration_2_external_gain   = eeprom_page_data[10];
-    etm_can_slave_debug_data.calibration_2_external_offset = eeprom_page_data[11];
-  }
-
-  write_error = 0xFFFF;
-  write_error &= ETMEEPromWritePageWithConfirmation(EEPROM_PAGE_ANALOG_CALIBRATION_3_4_5 ,&eeprom_page_data[0]);
-  if (write_error != 0xFFFF) {
-    can_params.eeprom_calibration_write_error = 1;
-  } else {
-    etm_can_slave_debug_data.calibration_3_internal_gain   = eeprom_page_data[0];
-    etm_can_slave_debug_data.calibration_3_internal_offset = eeprom_page_data[1];
-    etm_can_slave_debug_data.calibration_3_external_gain   = eeprom_page_data[2];
-    etm_can_slave_debug_data.calibration_3_external_offset = eeprom_page_data[3];
-
-    etm_can_slave_debug_data.calibration_4_internal_gain   = eeprom_page_data[4];
-    etm_can_slave_debug_data.calibration_4_internal_offset = eeprom_page_data[5];
-    etm_can_slave_debug_data.calibration_4_external_gain   = eeprom_page_data[6];
-    etm_can_slave_debug_data.calibration_4_external_offset = eeprom_page_data[7];
-
-    etm_can_slave_debug_data.calibration_5_internal_gain   = eeprom_page_data[8];
-    etm_can_slave_debug_data.calibration_5_internal_offset = eeprom_page_data[9];
-    etm_can_slave_debug_data.calibration_5_external_gain   = eeprom_page_data[10];
-    etm_can_slave_debug_data.calibration_5_external_offset = eeprom_page_data[11]; 
-  }
-
-  write_error = 0xFFFF;
-  write_error &= ETMEEPromWritePageWithConfirmation(EEPROM_PAGE_ANALOG_CALIBRATION_6_7 ,&eeprom_page_data[0]);
-  if (write_error != 0xFFFF) {
-    can_params.eeprom_calibration_write_error = 1;
-  } else {
-    etm_can_slave_debug_data.calibration_6_internal_gain   = eeprom_page_data[0];
-    etm_can_slave_debug_data.calibration_6_internal_offset = eeprom_page_data[1];
-    etm_can_slave_debug_data.calibration_6_external_gain   = eeprom_page_data[2];
-    etm_can_slave_debug_data.calibration_6_external_offset = eeprom_page_data[3];
-
-    etm_can_slave_debug_data.calibration_7_internal_gain   = eeprom_page_data[4];
-    etm_can_slave_debug_data.calibration_7_internal_offset = eeprom_page_data[5];
-    etm_can_slave_debug_data.calibration_7_external_gain   = eeprom_page_data[6];
-    etm_can_slave_debug_data.calibration_7_external_offset = eeprom_page_data[7];
-  }
-
-
-  
-  eeprom_page_data[0] = 0x2123;
-  eeprom_page_data[1] = 22222;
-  eeprom_page_data[2] = 0;
-  eeprom_page_data[3] = 0;
-  
-  eeprom_page_data[4] = 0;
-  eeprom_page_data[5] = 0;
-  eeprom_page_data[6] = 0;
-  eeprom_page_data[7] = 0;
-  
-  eeprom_page_data[8] = 0;
-  eeprom_page_data[9] = 0;
-  eeprom_page_data[10] = 0;
-  eeprom_page_data[11] = 0;
-  
-  eeprom_page_data[12] = 0;
-  eeprom_page_data[13] = 0;
-  eeprom_page_data[14] = 0;
-
-  write_error = 0xFFFF;
-  write_error &= ETMEEPromWritePageWithConfirmation(EEPROM_PAGE_BOARD_CONFIGURATION ,&eeprom_page_data[0]);
-  if (write_error != 0xFFFF) {
-    can_params.eeprom_calibration_write_error = 1;
-  } else {
-    slave_board_data.device_rev_2x_ASCII           = eeprom_page_data[0];
-    slave_board_data.device_serial_number          = eeprom_page_data[1];
   }
 }
 
@@ -1507,7 +1617,6 @@ static void ETMCanSlaveSendScopeData(void) {
 }
 
 
-
 void ETMCanSlaveSendStatus(void) {
   ETMCanMessage message;
   message.identifier = ETM_CAN_MSG_STATUS_TX | (can_params.address << 2);
@@ -1528,39 +1637,7 @@ void ETMCanSlaveSendStatus(void) {
   _NOTICE_5 = 0;
   _NOTICE_6 = 0;
   _NOTICE_7 = 0;
-
 }
-
-
-void ETMCanSlaveLogPulseData(unsigned int pulse_count, unsigned int log_data_1, unsigned int log_data_0) {
-  static unsigned int data_word_3;
-  static unsigned int data_word_2;
-  static unsigned int previous_pulse_count;
-  
-  if ((pulse_count & 0x0001) == 0) {
-    // this is an even number pulse count, store the data
-    data_word_3 = log_data_1;
-    data_word_2 = log_data_0;
-    previous_pulse_count = pulse_count;
-    return;
-  }
-  // This is an odd pulse count, send out the data
-
-  if (previous_pulse_count != (pulse_count & 0xFFFE)) {
-    data_word_3 = LOG_DEFAULT_VALUE_SLAVE_ALT;
-    data_word_2 = LOG_DEFAULT_VALUE_SLAVE_ALT;
-  }
-  
-  pulse_count >>= 1;
-  pulse_count &= 0x000F;
-  pulse_count <<= 4;
-  ETMCanSlaveLogData(pulse_count, data_word_3, data_word_2, log_data_1, log_data_0);
-
-  data_word_3 = LOG_DEFAULT_VALUE_SLAVE;
-  data_word_2 = LOG_DEFAULT_VALUE_SLAVE;
-}
-
-
 
 
 void ETMCanSlaveLogData(unsigned int packet_id, unsigned int word3, unsigned int word2, unsigned int word1, unsigned int word0) {
@@ -1616,6 +1693,7 @@ void ETMCanSlaveSendUpdateIfNewNotReady(void) {
   previous_ready_status = _CONTROL_NOT_READY;
 }
 
+
 void ETMCanSlaveClearDebug(void) {
   unsigned int n;
   unsigned int *reset_data_ptr;
@@ -1632,162 +1710,136 @@ void ETMCanSlaveClearDebug(void) {
 }
 
 
+void Compact12BitInto16Bit(unsigned int *transmit_data, unsigned int *source_data, unsigned int count) {
+  // Compacts 5 16 bit numbers (assuming 12bit) int 4
 
+  transmit_data[0]  = source_data[0] & 0xFFF;
+  transmit_data[0] |= ((source_data[1] << 12) & 0xF000);
 
-void ETMCanSlaveSetLogDataRegister(unsigned int log_register, unsigned int data_for_log) {
-  if (log_register > 0x0017) {
-    return;
-  }
-  slave_board_data.log_data[log_register] = data_for_log;
+  transmit_data[1]  = (source_data[1] >> 4) & 0xFF;
+  transmit_data[1] |= ((source_data[2] <<8) & 0xFF00);
+
+  transmit_data[2]  = (source_data[2]>>8) & 0xF;
+  transmit_data[2] |= (source_data[3] << 4) & 0xFFF0;
+
+  transmit_data[3]  = source_data[4] & 0xFFF;
+  transmit_data[3] |= (count & 0x000F) << 12;
 }
 
 
-void ETMCanSlaveSetDebugRegister(unsigned int debug_register, unsigned int debug_value) {
-  if (debug_register > 0x000F) {
-    return;
-  }
-  etm_can_slave_debug_data.debug_reg[debug_register] = debug_value;
-}
+void ETMCanSlaveLoadDefaultCalibration(void) {
+  unsigned int eeprom_page_data[16];
+  unsigned int write_error;
+  eeprom_page_data[0] = ETM_ANALOG_CALIBRATION_SCALE_1;
+  eeprom_page_data[1] = ETM_ANALOG_OFFSET_ZERO;
+  eeprom_page_data[2] = ETM_ANALOG_CALIBRATION_SCALE_1;
+  eeprom_page_data[3] = ETM_ANALOG_OFFSET_ZERO;
 
-
-unsigned int ETMCanSlaveGetComFaultStatus(void) {
-  return etm_can_slave_com_loss;
-}
-
-
-unsigned int ETMCanSlaveGetSyncMsgHighSpeedLogging(void) {
-  if (etm_can_slave_sync_message.sync_0_control_word.sync_1_high_speed_logging_enabled) {
-    return 0xFFFF;
-  } else {
-    return 0;
-  }
-}
-
-
-unsigned int ETMCanSlaveGetSyncMsgCoolingFault(void) {
-  if (etm_can_slave_sync_message.sync_0_control_word.sync_4_cooling_fault) {
-    return 0xFFFF;
-  } else {
-    return 0;
-  }
-}
-
-
-unsigned int ETMCanSlaveGetSyncMsgSystemHVDisable(void) {
-  if (etm_can_slave_sync_message.sync_0_control_word.sync_5_system_hv_disable) {
-    return 0xFFFF;
-  } else {
-    return 0;
-  }
-}
-
-
-unsigned int ETMCanSlaveGetSyncMsgGunDriverDisableHeater(void) {
-  if (etm_can_slave_sync_message.sync_0_control_word.sync_6_gun_driver_disable_heater) {
-    return 0xFFFF;
-  } else {
-    return 0;
-  }
-}
-
-
-unsigned int ETMCanSlaveGetSyncMsgScopeHVVmonEnabled(void) {
-  if (etm_can_slave_sync_message.sync_0_control_word.sync_D_scope_HV_HVMON_active) {
-    return 0xFFFF;
-  } else {
-    return 0;
-  }
-}
-
-
-unsigned int ETMCanSlaveGetSyncMsgEnableFaultIgnore(void) {
-  if (etm_can_slave_sync_message.sync_0_control_word.sync_E_ingnore_faults_enabled) {
-    return 0xFFFF;
-  } else {
-    return 0;
-  }
-}
-
-
-unsigned int ETMCanSlaveGetSyncMsgResetEnable(void) {
-  if (etm_can_slave_sync_message.sync_0_control_word.sync_0_reset_enable) {
-    return 0xFFFF;
-  } else {
-    return 0;
-  }
-}
-
-
-
-unsigned int last_return_value_level_high_word_count_low_word;  // Pulse Level High Word, Pulse Count Low Word
-
-void ETMCanSlaveTriggerRecieved(void) {
-  // Does the slave need to send anything out or just update the next energy level
-  unsigned char last_pulse_count;
-  last_pulse_count = last_return_value_level_high_word_count_low_word;
-
-  // Disable the Can Interrupt
-  _C1IE = 0;
-  _C2IE = 0;
+  eeprom_page_data[4] = ETM_ANALOG_CALIBRATION_SCALE_1;
+  eeprom_page_data[5] = ETM_ANALOG_OFFSET_ZERO;
+  eeprom_page_data[6] = ETM_ANALOG_CALIBRATION_SCALE_1;
+  eeprom_page_data[7] = ETM_ANALOG_OFFSET_ZERO;
   
-  if (last_pulse_count == etm_can_slave_sync_message.pulse_count) {
-    // we have not recieved a new sync message yet
-    // Update pulse_count and pulse_level with the next expected value
-    // Check to see if we are in interleave mode
+  eeprom_page_data[8] = ETM_ANALOG_CALIBRATION_SCALE_1;
+  eeprom_page_data[9] = ETM_ANALOG_OFFSET_ZERO;
+  eeprom_page_data[10] = ETM_ANALOG_CALIBRATION_SCALE_1;
+  eeprom_page_data[11] = ETM_ANALOG_OFFSET_ZERO;
 
-    etm_can_slave_sync_message.pulse_count = (last_pulse_count + 1);
-    switch (etm_can_slave_sync_message.next_energy_level)
-      {
-      
-      case DOSE_SELECT_INTERLEAVE_0_1_DOSE_LEVEL_0:
-	etm_can_slave_sync_message.next_energy_level = DOSE_SELECT_INTERLEAVE_0_1_DOSE_LEVEL_1;
-	break;
-	
-      case DOSE_SELECT_INTERLEAVE_0_1_DOSE_LEVEL_1:
-	etm_can_slave_sync_message.next_energy_level = DOSE_SELECT_INTERLEAVE_0_1_DOSE_LEVEL_0;
-	break;
-	
-      case DOSE_SELECT_INTERLEAVE_2_3_DOSE_LEVEL_2:
-	etm_can_slave_sync_message.next_energy_level = DOSE_SELECT_INTERLEAVE_2_3_DOSE_LEVEL_3;
-	break;
-	
-      case DOSE_SELECT_INTERLEAVE_2_3_DOSE_LEVEL_3:
-	etm_can_slave_sync_message.next_energy_level = DOSE_SELECT_INTERLEAVE_2_3_DOSE_LEVEL_2;
-	break;
-	
-      default:
-	// Don't change the pulse level because we aren't in interleaved mode
-	break;
-      }
-  }
+  eeprom_page_data[12] = 0;
+  eeprom_page_data[13] = 0;
+  eeprom_page_data[14] = 0;
 
-  // Reenable the relevant can interrupt
-  if (CXEC_ptr == &C1EC) {
-    // We are using CAN1.
-    _C1IE = 1;
+  write_error = 0xFFFF;
+  write_error &= ETMEEPromWritePageWithConfirmation(EEPROM_PAGE_ANALOG_CALIBRATION_0_1_2 ,&eeprom_page_data[0]);
+  if (write_error != 0xFFFF) {
+    can_params.eeprom_calibration_write_error = 1;
   } else {
-    _C2IE = 1;
+    etm_can_slave_debug_data.calibration_0_internal_gain   = eeprom_page_data[0];
+    etm_can_slave_debug_data.calibration_0_internal_offset = eeprom_page_data[1];
+    etm_can_slave_debug_data.calibration_0_external_gain   = eeprom_page_data[2];
+    etm_can_slave_debug_data.calibration_0_external_offset = eeprom_page_data[3];
+
+    etm_can_slave_debug_data.calibration_1_internal_gain   = eeprom_page_data[4];
+    etm_can_slave_debug_data.calibration_1_internal_offset = eeprom_page_data[5];
+    etm_can_slave_debug_data.calibration_1_external_gain   = eeprom_page_data[6];
+    etm_can_slave_debug_data.calibration_1_external_offset = eeprom_page_data[7];
+
+    etm_can_slave_debug_data.calibration_2_internal_gain   = eeprom_page_data[8];
+    etm_can_slave_debug_data.calibration_2_internal_offset = eeprom_page_data[9];
+    etm_can_slave_debug_data.calibration_2_external_gain   = eeprom_page_data[10];
+    etm_can_slave_debug_data.calibration_2_external_offset = eeprom_page_data[11];
+  }
+
+  write_error = 0xFFFF;
+  write_error &= ETMEEPromWritePageWithConfirmation(EEPROM_PAGE_ANALOG_CALIBRATION_3_4_5 ,&eeprom_page_data[0]);
+  if (write_error != 0xFFFF) {
+    can_params.eeprom_calibration_write_error = 1;
+  } else {
+    etm_can_slave_debug_data.calibration_3_internal_gain   = eeprom_page_data[0];
+    etm_can_slave_debug_data.calibration_3_internal_offset = eeprom_page_data[1];
+    etm_can_slave_debug_data.calibration_3_external_gain   = eeprom_page_data[2];
+    etm_can_slave_debug_data.calibration_3_external_offset = eeprom_page_data[3];
+
+    etm_can_slave_debug_data.calibration_4_internal_gain   = eeprom_page_data[4];
+    etm_can_slave_debug_data.calibration_4_internal_offset = eeprom_page_data[5];
+    etm_can_slave_debug_data.calibration_4_external_gain   = eeprom_page_data[6];
+    etm_can_slave_debug_data.calibration_4_external_offset = eeprom_page_data[7];
+
+    etm_can_slave_debug_data.calibration_5_internal_gain   = eeprom_page_data[8];
+    etm_can_slave_debug_data.calibration_5_internal_offset = eeprom_page_data[9];
+    etm_can_slave_debug_data.calibration_5_external_gain   = eeprom_page_data[10];
+    etm_can_slave_debug_data.calibration_5_external_offset = eeprom_page_data[11]; 
+  }
+
+  write_error = 0xFFFF;
+  write_error &= ETMEEPromWritePageWithConfirmation(EEPROM_PAGE_ANALOG_CALIBRATION_6_7 ,&eeprom_page_data[0]);
+  if (write_error != 0xFFFF) {
+    can_params.eeprom_calibration_write_error = 1;
+  } else {
+    etm_can_slave_debug_data.calibration_6_internal_gain   = eeprom_page_data[0];
+    etm_can_slave_debug_data.calibration_6_internal_offset = eeprom_page_data[1];
+    etm_can_slave_debug_data.calibration_6_external_gain   = eeprom_page_data[2];
+    etm_can_slave_debug_data.calibration_6_external_offset = eeprom_page_data[3];
+
+    etm_can_slave_debug_data.calibration_7_internal_gain   = eeprom_page_data[4];
+    etm_can_slave_debug_data.calibration_7_internal_offset = eeprom_page_data[5];
+    etm_can_slave_debug_data.calibration_7_external_gain   = eeprom_page_data[6];
+    etm_can_slave_debug_data.calibration_7_external_offset = eeprom_page_data[7];
+  }
+
+
+  
+  eeprom_page_data[0] = 0x2123;
+  eeprom_page_data[1] = 22222;
+  eeprom_page_data[2] = 0;
+  eeprom_page_data[3] = 0;
+  
+  eeprom_page_data[4] = 0;
+  eeprom_page_data[5] = 0;
+  eeprom_page_data[6] = 0;
+  eeprom_page_data[7] = 0;
+  
+  eeprom_page_data[8] = 0;
+  eeprom_page_data[9] = 0;
+  eeprom_page_data[10] = 0;
+  eeprom_page_data[11] = 0;
+  
+  eeprom_page_data[12] = 0;
+  eeprom_page_data[13] = 0;
+  eeprom_page_data[14] = 0;
+
+  write_error = 0xFFFF;
+  write_error &= ETMEEPromWritePageWithConfirmation(EEPROM_PAGE_BOARD_CONFIGURATION ,&eeprom_page_data[0]);
+  if (write_error != 0xFFFF) {
+    can_params.eeprom_calibration_write_error = 1;
+  } else {
+    slave_board_data.device_rev_2x_ASCII           = eeprom_page_data[0];
+    slave_board_data.device_serial_number          = eeprom_page_data[1];
   }
 }
 
 
-unsigned char ETMCanSlaveGetPulseLevel(void) {
-  return (etm_can_slave_sync_message.next_energy_level & 0x0F);
-}
-
-unsigned char ETMCanSlaveGetPulseCount(void) {
-  return (etm_can_slave_sync_message.pulse_count);
-}
-
-unsigned int ETMCanSlaveGetSetting(unsigned char setting_select) {
-  unsigned int *data_ptr;
-  data_ptr = (unsigned int*)&slave_data;
-  data_ptr += setting_select;
-  return *data_ptr;
-}
-
-
- void __attribute__((interrupt(__save__(CORCON,SR)), no_auto_psv)) _C1Interrupt(void) {
+void __attribute__((interrupt(__save__(CORCON,SR)), no_auto_psv)) _C1Interrupt(void) {
   _C1IF = 0;
   DoCanInterrupt();
 }
@@ -1815,7 +1867,7 @@ void DoCanInterrupt(void) {
       *(unsigned int*)&etm_can_slave_sync_message.sync_0_control_word = can_message.word0;
       *(unsigned int*)&etm_can_slave_sync_message.pulse_count = can_message.word1;
       etm_can_slave_sync_message.prf_from_ecb = can_message.word2;
-      *(unsigned int*)&etm_can_slave_sync_message.scope_A_select = can_message.word3;
+      *(unsigned int*)&etm_can_slave_sync_message.unused_A = can_message.word3;
       ClrWdt();
       etm_can_slave_com_loss = 0;
       etm_can_slave_communication_timeout_holding_var = ETMTickGet();
@@ -1862,85 +1914,4 @@ void DoCanInterrupt(void) {
       ETMSetPin(can_params.led);
     }
   }
-}
-
-
-
-
-
-void ETMCanSlaveLogHVVmonData(unsigned int sp4, unsigned int sp3, unsigned int sp2, unsigned int sp1, unsigned int sp0) {
-  unsigned int data3;
-  unsigned int data2;
-  unsigned int data1;
-  unsigned int data0;
-
-  if (slave_data.scope_hv_vmon_settings == SCOPE_CHANNEL_ACTIVE) {
-    data0  = sp0 & 0xFFF;
-    data0 |= ((sp1 << 12) & 0xF000);
-    
-    data1  = (sp1 >> 4) & 0xFF;
-    data1 |= ((sp2 <<8) & 0xFF00);
-    
-    data2  = (sp2>>8) & 0xF;
-    data2 |= (sp3 << 4) & 0xFFF0;
-    
-    data3  = sp4 & 0xFFF;
-
-    ETMCanSlaveLogData(ETM_CAN_DATA_LOG_REGISTER_HV_VMON_DATA, data3, data2, data1, data0);
-  }
-}
-
-void ETMCanSlaveLogPulseCurrent(TYPE_PULSE_DATA *pulse_data) {
-  static unsigned long start_tick;
-  unsigned int send_this_pulse;
-
-  send_this_pulse = 0;
-  if (ETMTickGreaterThanNMilliseconds(1000, start_tick)) {
-    // It has been at least 1 second since the last time a pulse was logged.
-    send_this_pulse = 1;
-  }
-  
-  if (pulse_data->arc_this_pulse) {
-    //send_this_pulse = 1;
-  }
-  if (send_this_pulse) {
-    pulse_data_transmit_index = 0;
-    Compact12BitInto16Bit(&pulse_data_to_transmit[0], &pulse_data->data[0], 0);
-    Compact12BitInto16Bit(&pulse_data_to_transmit[4], &pulse_data->data[5], 1);
-    Compact12BitInto16Bit(&pulse_data_to_transmit[8], &pulse_data->data[10], 2);
-    Compact12BitInto16Bit(&pulse_data_to_transmit[12], &pulse_data->data[15], 3);
-    Compact12BitInto16Bit(&pulse_data_to_transmit[16], &pulse_data->data[20], 4);
-    Compact12BitInto16Bit(&pulse_data_to_transmit[20], &pulse_data->data[25], 5);
-    Compact12BitInto16Bit(&pulse_data_to_transmit[24], &pulse_data->data[30], 6);
-    Compact12BitInto16Bit(&pulse_data_to_transmit[28], &pulse_data->data[35], 7);
-    Compact12BitInto16Bit(&pulse_data_to_transmit[32], &pulse_data->data[40], 8);
-    Compact12BitInto16Bit(&pulse_data_to_transmit[36], &pulse_data->data[45], 9);
-    start_tick = ETMTickGet();
-  }
-}
-
-
-void ETMCanSlaveSetScopeDataAddress(unsigned int scope_channel, unsigned int *data_address) {
-  if (scope_channel >= SCOPE_DATA_SELECT_SIZE) {
-    // Not a valid scope channel
-    return;
-  }
-  scope_data_sources[scope_channel] = data_address;
-}
-
-
-void Compact12BitInto16Bit(unsigned int *transmit_data, unsigned int *source_data, unsigned int count) {
-  // Compacts 5 16 bit numbers (assuming 12bit) int 4
-
-  transmit_data[0]  = source_data[0] & 0xFFF;
-  transmit_data[0] |= ((source_data[1] << 12) & 0xF000);
-
-  transmit_data[1]  = (source_data[1] >> 4) & 0xFF;
-  transmit_data[1] |= ((source_data[2] <<8) & 0xFF00);
-
-  transmit_data[2]  = (source_data[2]>>8) & 0xF;
-  transmit_data[2] |= (source_data[3] << 4) & 0xFFF0;
-
-  transmit_data[3]  = source_data[4] & 0xFFF;
-  transmit_data[3] |= (count & 0x000F) << 12;
 }
