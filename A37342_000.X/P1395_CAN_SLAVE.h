@@ -21,7 +21,6 @@ typedef struct {
 } TYPE_PULSE_DATA;
 
 
-extern ETMCanBoardData           slave_board_data;            // This contains information that is always mirrored on ECB
 
 
 //------------ SLAVE PUBLIC FUNCTIONS AND VARIABLES ------------------- //
@@ -68,7 +67,7 @@ unsigned int ETMCanSlaveGetComFaultStatus(void);
 
 
 // ------------- SYNC MESSAGE COMMANDS ------------------ //
-unsigned int ETMCanSlaveGetSyncMsgResetEnable(void); // DPARKER CHANGE HOW THIS OPERATES
+//unsigned int ETMCanSlaveGetSyncMsgResetEnable(void); // DPARKER CHANGE HOW THIS OPERATES
 /*
   returns 0xFFFF if reset is active, 0 otherwise
 */
@@ -96,7 +95,7 @@ unsigned int ETMCanSlaveGetSyncMsgGunDriverDisableHeater(void);
   the gun driver should shut down the heater (and everything else it needs to safely) on this
 */
 
-unsigned int ETMCanSlaveGetSyncMsgEnableFaultIgnore(void);
+//unsigned int ETMCanSlaveGetSyncMsgEnableFaultIgnore(void);
 /*
   DPARKER WORK ON THE FAULT IGNORE FUNCTIONALITY
 */
@@ -207,137 +206,97 @@ unsigned int ETMCanSlaveGetSetting(unsigned char setting_select);
 
 
 
-// --------------------------- #defines to access the status register --------------------------- //
+void ETMCanSlaveStatusUpdateBitNotReady(unsigned int value);
+#define NOT_READY         1
+#define READY             0
 
-#define _CONTROL_NOT_READY            slave_board_data.status.control_notice_bits.control_not_ready
-#define _CONTROL_NOT_CONFIGURED       slave_board_data.status.control_notice_bits.control_not_configured
-#define _CONTROL_SELF_CHECK_ERROR     slave_board_data.status.control_notice_bits.control_self_check_error
-#define _CONTROL_3                    slave_board_data.status.control_notice_bits.control_3_unused
-#define _CONTROL_4                    slave_board_data.status.control_notice_bits.control_4_unused
-#define _CONTROL_5                    slave_board_data.status.control_notice_bits.control_5_unused
-#define _CONTROL_6                    slave_board_data.status.control_notice_bits.control_6_unused
-#define _CONTROL_7                    slave_board_data.status.control_notice_bits.control_7_unused
+void ETMCanSlaveStatusSetNoticeBit(unsigned int notice_bit);
 
+unsigned int ETMCanSlaveStatusCheckNotConfigured(void);
+// Will return 0xFFFF if not configured, 0 otherwise
 
-#define _NOTICE_0                     slave_board_data.status.control_notice_bits.notice_0
-#define _NOTICE_1                     slave_board_data.status.control_notice_bits.notice_1
-#define _NOTICE_2                     slave_board_data.status.control_notice_bits.notice_2
-#define _NOTICE_3                     slave_board_data.status.control_notice_bits.notice_3
-#define _NOTICE_4                     slave_board_data.status.control_notice_bits.notice_4
-#define _NOTICE_5                     slave_board_data.status.control_notice_bits.notice_5
-#define _NOTICE_6                     slave_board_data.status.control_notice_bits.notice_6
-#define _NOTICE_7                     slave_board_data.status.control_notice_bits.notice_7
+void ETMCanSlaveStatusUpdateFaultBit(unsigned int fault_bit, unsigned int value);
 
-#define _FAULT_0                      slave_board_data.status.fault_bits.fault_0
-#define _FAULT_1                      slave_board_data.status.fault_bits.fault_1
-#define _FAULT_2                      slave_board_data.status.fault_bits.fault_2
-#define _FAULT_3                      slave_board_data.status.fault_bits.fault_3
-#define _FAULT_4                      slave_board_data.status.fault_bits.fault_4
-#define _FAULT_5                      slave_board_data.status.fault_bits.fault_5
-#define _FAULT_6                      slave_board_data.status.fault_bits.fault_6
-#define _FAULT_7                      slave_board_data.status.fault_bits.fault_7
-#define _FAULT_8                      slave_board_data.status.fault_bits.fault_8
-#define _FAULT_9                      slave_board_data.status.fault_bits.fault_9
-#define _FAULT_A                      slave_board_data.status.fault_bits.fault_A
-#define _FAULT_B                      slave_board_data.status.fault_bits.fault_B
-#define _FAULT_C                      slave_board_data.status.fault_bits.fault_C
-#define _FAULT_D                      slave_board_data.status.fault_bits.fault_D
-#define _FAULT_E                      slave_board_data.status.fault_bits.fault_E
-#define _FAULT_F                      slave_board_data.status.fault_bits.fault_F
+unsigned int ETMCanSlaveStatusReadFaultBit(unsigned int fault_bit);
+// Will return 0xFFFF if the fault bit is set, 0 otherwise
 
-#define _LOGGED_FAULT_0               _FAULT_0
-#define _LOGGED_FAULT_1               _FAULT_1
-#define _LOGGED_FAULT_2               _FAULT_2
-#define _LOGGED_FAULT_3               _FAULT_3
-#define _LOGGED_FAULT_4               _FAULT_4
-#define _LOGGED_FAULT_5               _FAULT_5
-#define _LOGGED_FAULT_6               _FAULT_6
-#define _LOGGED_FAULT_7               _FAULT_7
-#define _LOGGED_FAULT_8               _FAULT_8
-#define _LOGGED_FAULT_9               _FAULT_9
-#define _LOGGED_FAULT_A               _FAULT_A
-#define _LOGGED_FAULT_B               _FAULT_B
-#define _LOGGED_FAULT_C               _FAULT_C
-#define _LOGGED_FAULT_D               _FAULT_D
-#define _LOGGED_FAULT_E               _FAULT_E
-#define _LOGGED_FAULT_F               _FAULT_F
+unsigned int ETMCanSlaveStatusReadFaultRegister(void);
+// Will return 0xFFFF if ANY fault bit is set, 0 otherwise
 
+void ETMCanSlaveStatusUpdateLoggedBit(unsigned int logged_bit, unsigned int value);
 
-#define _WARNING_0                    slave_board_data.status.warning_bits.warning_0
-#define _WARNING_1                    slave_board_data.status.warning_bits.warning_1
-#define _WARNING_2                    slave_board_data.status.warning_bits.warning_2
-#define _WARNING_3                    slave_board_data.status.warning_bits.warning_3
-#define _WARNING_4                    slave_board_data.status.warning_bits.warning_4
-#define _WARNING_5                    slave_board_data.status.warning_bits.warning_5
-#define _WARNING_6                    slave_board_data.status.warning_bits.warning_6
-#define _WARNING_7                    slave_board_data.status.warning_bits.warning_7
-#define _WARNING_8                    slave_board_data.status.warning_bits.warning_8
-#define _WARNING_9                    slave_board_data.status.warning_bits.warning_9
-#define _WARNING_A                    slave_board_data.status.warning_bits.warning_A
-#define _WARNING_B                    slave_board_data.status.warning_bits.warning_B
-#define _WARNING_C                    slave_board_data.status.warning_bits.warning_C
-#define _WARNING_D                    slave_board_data.status.warning_bits.warning_D
-#define _WARNING_E                    slave_board_data.status.warning_bits.warning_E
-#define _WARNING_F                    slave_board_data.status.warning_bits.warning_F
+unsigned int ETMCanSlaveStatusReadLoggedBit(unsigned int logged_bit);
+// Will return 0xFFFF if the bit is set, 0 otherwise
 
-#define _LOGGED_STATUS_0              _WARNING_0
-#define _LOGGED_STATUS_1              _WARNING_1
-#define _LOGGED_STATUS_2              _WARNING_2
-#define _LOGGED_STATUS_3              _WARNING_3
-#define _LOGGED_STATUS_4              _WARNING_4
-#define _LOGGED_STATUS_5              _WARNING_5
-#define _LOGGED_STATUS_6              _WARNING_6
-#define _LOGGED_STATUS_7              _WARNING_7
-#define _LOGGED_STATUS_8              _WARNING_8
-#define _LOGGED_STATUS_9              _WARNING_9
-#define _LOGGED_STATUS_A              _WARNING_A
-#define _LOGGED_STATUS_B              _WARNING_B
-#define _LOGGED_STATUS_C              _WARNING_C
-#define _LOGGED_STATUS_D              _WARNING_D
-#define _LOGGED_STATUS_E              _WARNING_E
-#define _LOGGED_STATUS_F              _WARNING_F
+void ETMCanSlaveStatusUpdateNotLoggedBit(unsigned int logged_bit, unsigned int value);
 
-
-#define _NOT_LOGGED_0                 slave_board_data.status.not_logged_bits.not_logged_0
-#define _NOT_LOGGED_1                 slave_board_data.status.not_logged_bits.not_logged_1
-#define _NOT_LOGGED_2                 slave_board_data.status.not_logged_bits.not_logged_2
-#define _NOT_LOGGED_3                 slave_board_data.status.not_logged_bits.not_logged_3
-#define _NOT_LOGGED_4                 slave_board_data.status.not_logged_bits.not_logged_4
-#define _NOT_LOGGED_5                 slave_board_data.status.not_logged_bits.not_logged_5
-#define _NOT_LOGGED_6                 slave_board_data.status.not_logged_bits.not_logged_6
-#define _NOT_LOGGED_7                 slave_board_data.status.not_logged_bits.not_logged_7
-#define _NOT_LOGGED_8                 slave_board_data.status.not_logged_bits.not_logged_8
-#define _NOT_LOGGED_9                 slave_board_data.status.not_logged_bits.not_logged_9
-#define _NOT_LOGGED_A                 slave_board_data.status.not_logged_bits.not_logged_A
-#define _NOT_LOGGED_B                 slave_board_data.status.not_logged_bits.not_logged_B
-#define _NOT_LOGGED_C                 slave_board_data.status.not_logged_bits.not_logged_C
-#define _NOT_LOGGED_D                 slave_board_data.status.not_logged_bits.not_logged_D
-#define _NOT_LOGGED_E                 slave_board_data.status.not_logged_bits.not_logged_E
-#define _NOT_LOGGED_F                 slave_board_data.status.not_logged_bits.not_logged_F
-
-#define _NOT_LOGGED_STATUS_0          _NOT_LOGGED_0
-#define _NOT_LOGGED_STATUS_1          _NOT_LOGGED_1
-#define _NOT_LOGGED_STATUS_2          _NOT_LOGGED_2
-#define _NOT_LOGGED_STATUS_3          _NOT_LOGGED_3
-#define _NOT_LOGGED_STATUS_4          _NOT_LOGGED_4
-#define _NOT_LOGGED_STATUS_5          _NOT_LOGGED_5
-#define _NOT_LOGGED_STATUS_6          _NOT_LOGGED_6
-#define _NOT_LOGGED_STATUS_7          _NOT_LOGGED_7
-#define _NOT_LOGGED_STATUS_8          _NOT_LOGGED_8
-#define _NOT_LOGGED_STATUS_9          _NOT_LOGGED_9
-#define _NOT_LOGGED_STATUS_A          _NOT_LOGGED_A
-#define _NOT_LOGGED_STATUS_B          _NOT_LOGGED_B
-#define _NOT_LOGGED_STATUS_C          _NOT_LOGGED_C
-#define _NOT_LOGGED_STATUS_D          _NOT_LOGGED_D
-#define _NOT_LOGGED_STATUS_E          _NOT_LOGGED_E
-#define _NOT_LOGGED_STATUS_F          _NOT_LOGGED_F
+unsigned int ETMCanSlaveStatusReadNotLoggedBit(unsigned int logged_bit);
+// Will return 0xFFFF if the bit is set, 0 otherwise
 
 
 
-#define _CONTROL_REGISTER             *(unsigned int*)&slave_board_data.status.control_notice_bits
-#define _FAULT_REGISTER               *(unsigned int*)&slave_board_data.status.fault_bits
-#define _WARNING_REGISTER             *(unsigned int*)&slave_board_data.status.warning_bits
-#define _NOT_LOGGED_REGISTER          *(unsigned int*)&slave_board_data.status.not_logged_bits
+
+#define _FAULT_CAN_COMMUNICATION      0x0001
+#define _FAULT_1                      0x0002
+#define _FAULT_2                      0x0004 
+#define _FAULT_3                      0x0008
+#define _FAULT_4                      0x0010
+#define _FAULT_5                      0x0020
+#define _FAULT_6                      0x0040
+#define _FAULT_7                      0x0080
+#define _FAULT_8                      0x0100
+#define _FAULT_9                      0x0200
+#define _FAULT_A                      0x0400
+#define _FAULT_B                      0x0800
+#define _FAULT_C                      0x1000
+#define _FAULT_D                      0x2000
+#define _FAULT_E                      0x4000
+#define _FAULT_F                      0x8000
+
+#define _NOTICE_0                     0x0100
+#define _NOTICE_1                     0x0200
+#define _NOTICE_2                     0x0400
+#define _NOTICE_3                     0x0800
+#define _NOTICE_4                     0x1000
+#define _NOTICE_5                     0x2000
+#define _NOTICE_6                     0x4000
+#define _NOTICE_7                     0x8000
+
+#define _LOGGED_STATUS_0              0x0001
+#define _LOGGED_STATUS_1              0x0002
+#define _LOGGED_STATUS_2              0x0004
+#define _LOGGED_STATUS_3              0x0008
+#define _LOGGED_STATUS_4              0x0010
+#define _LOGGED_STATUS_5              0x0020
+#define _LOGGED_STATUS_6              0x0040
+#define _LOGGED_STATUS_7              0x0080
+#define _LOGGED_STATUS_8              0x0100
+#define _LOGGED_STATUS_9              0x0200
+#define _LOGGED_STATUS_A              0x0400
+#define _LOGGED_STATUS_B              0x0800
+#define _LOGGED_STATUS_C              0x1000
+#define _LOGGED_STATUS_D              0x2000
+#define _LOGGED_STATUS_E              0x4000
+#define _LOGGED_STATUS_F              0x8000
+
+#define _NOT_LOGGED_STATUS_0          0x0001
+#define _NOT_LOGGED_STATUS_1          0x0002
+#define _NOT_LOGGED_STATUS_2          0x0004
+#define _NOT_LOGGED_STATUS_3          0x0008
+#define _NOT_LOGGED_STATUS_4          0x0010
+#define _NOT_LOGGED_STATUS_5          0x0020
+#define _NOT_LOGGED_STATUS_6          0x0040
+#define _NOT_LOGGED_STATUS_7          0x0080
+#define _NOT_LOGGED_STATUS_8          0x0100
+#define _NOT_LOGGED_STATUS_9          0x0200
+#define _NOT_LOGGED_STATUS_A          0x0400
+#define _NOT_LOGGED_STATUS_B          0x0800
+#define _NOT_LOGGED_STATUS_C          0x1000
+#define _NOT_LOGGED_STATUS_D          0x2000
+#define _NOT_LOGGED_STATUS_E          0x4000
+#define _NOT_LOGGED_STATUS_F          0x8000
+
+
 
 
 #endif

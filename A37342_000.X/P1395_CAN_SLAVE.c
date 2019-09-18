@@ -102,7 +102,7 @@ static void ETMCanSlaveSendScopeData(void);
 static void ETMCanSlaveSendStatus(void);
 static void ETMCanSlaveLogData(unsigned int packet_id, unsigned int word3, unsigned int word2, unsigned int word1, unsigned int word0);
 static void ETMCanSlaveCheckForTimeOut(void);
-static void ETMCanSlaveSendUpdateIfNewNotReady(void);
+//static void ETMCanSlaveSendUpdateIfNewNotReady(void);
 static void ETMCanSlaveClearDebug(void);
 static void Compact12BitInto16Bit(unsigned int *transmit_data, unsigned int *source_data, unsigned int count);
 static void ETMCanSlaveLoadDefaultCalibration(void);
@@ -212,6 +212,11 @@ void ETMCanSlaveInitialize(unsigned int requested_can_port, unsigned long fcy, u
 
   unsigned int  eeprom_page_data[16];
   
+  slave_board_data.status.control_notice_bits = 0;
+  slave_board_data.status.fault_bits = 0;
+  slave_board_data.status.warning_bits = 0;
+  slave_board_data.status.not_logged_bits = 0;
+  
   if (ETMTickNotInitialized()) {
     ETMTickInitialize(fcy, ETM_TICK_USE_TIMER_5);
   }
@@ -219,7 +224,7 @@ void ETMCanSlaveInitialize(unsigned int requested_can_port, unsigned long fcy, u
   BufferByte64Initialize(&discrete_cmd_buffer);
 
   setting_data_recieved &= 0b00000000;
-  _CONTROL_NOT_CONFIGURED = 1;
+  slave_board_data.status.control_notice_bits |= _CONTROL_NOT_CONFIGURED_BIT ; // set the not configured bit
   
   etm_can_slave_debug_data.can_build_version = P1395_CAN_SLAVE_VERSION;
   etm_can_slave_debug_data.library_build_version = ETM_LIBRARY_VERSION;
@@ -246,8 +251,6 @@ void ETMCanSlaveInitialize(unsigned int requested_can_port, unsigned long fcy, u
   etm_can_slave_sync_message.prf_from_ecb = 0;
   etm_can_slave_sync_message.unused_A = 0;
   etm_can_slave_sync_message.unused_B = 0;
-  
-  
   
   etm_can_slave_com_loss = 0;
 
@@ -668,8 +671,9 @@ void ETMCanSlaveDoCan(void) {
   ETMCanSlaveTimedTransmit();
   ETMCanSlaveSendScopeData();
   ETMCanSlaveCheckForTimeOut();
-  ETMCanSlaveSendUpdateIfNewNotReady();
-
+  //ETMCanSlaveSendUpdateIfNewNotReady();
+  ETMCanSlaveStatusUpdateFaultBit(_FAULT_CAN_COMMUNICATION, etm_can_slave_com_loss);
+  
   // Log debugging information
   etm_can_slave_debug_data.RCON_value = RCON;
   
@@ -694,11 +698,11 @@ unsigned char ETMCanSlaveGetDiscreteCMD(void) {
   return 0;
 }
 
-
+/*
 unsigned int ETMCanSlaveGetComFaultStatus(void) {
   return etm_can_slave_com_loss;
 }
-
+*/
 
 // DPARKER CONSIDER CHANGING HOW RESET ENABLE WORKS, POSSIBLY PART OF REWORK OF FAULT VISABILITY
 unsigned int ETMCanSlaveGetSyncMsgResetEnable(void) {
@@ -935,6 +939,103 @@ unsigned int ETMCanSlaveGetSetting(unsigned char setting_select) {
 }
 
 
+void ETMCanSlaveStatusUpdateBitNotReady(unsigned int value) {
+  if (value) {
+    if (slave_board_data.status.control_notice_bits & _CONTROL_NOT_READY_BIT) {
+      // THIS IS A NEW NOT READY BIT - SEND OUT NEW STATUS MESSAGE
+      slave_board_data.status.control_notice_bits |= _CONTROL_NOT_READY_BIT;
+      ETMCanSlaveSendStatus();
+    }
+  } else {
+    slave_board_data.status.control_notice_bits &= !_CONTROL_NOT_READY_BIT;
+  }
+}
+
+
+void ETMCanSlaveStatusSetNoticeBit(unsigned int notice_bit) {
+  slave_board_data.status.control_notice_bits |= notice_bit;
+}
+
+
+unsigned int ETMCanSlaveStatusCheckNotConfigured(void) {
+  if (slave_board_data.status.control_notice_bits & _CONTROL_NOT_CONFIGURED_BIT) {
+    return 0xFFFF;
+  }
+  return 0x0000;
+}
+
+
+void ETMCanSlaveStatusUpdateFaultBit(unsigned int fault_bit, unsigned int value) {
+  if (value) {
+    slave_board_data.status.fault_bits |= fault_bit;
+  } else {
+    if (etm_can_slave_sync_message.sync_0_control_word.sync_0_reset_enable) {
+      slave_board_data.status.fault_bits &= !fault_bit;
+    }
+  }
+}
+
+
+unsigned int ETMCanSlaveStatusReadFaultBit(unsigned int fault_bit) {
+  unsigned int temp_faults;
+
+  temp_faults  = slave_board_data.status.fault_bits;
+  temp_faults &= !etm_can_slave_debug_data.faults_being_ignored;
+  
+  if (temp_faults & fault_bit) {
+    return 0xFFFF;
+  }
+  return 0;
+}
+
+
+unsigned int ETMCanSlaveStatusReadFaultRegister(void) {
+  unsigned int temp_faults;
+
+  temp_faults  = slave_board_data.status.fault_bits;
+  temp_faults &= !etm_can_slave_debug_data.faults_being_ignored;
+  
+  if (temp_faults) {
+    return 0xFFFF;
+  }
+  return 0;
+}
+
+
+void ETMCanSlaveStatusUpdateLoggedBit(unsigned int logged_bit, unsigned int value) {
+  if (value) {
+    slave_board_data.status.warning_bits |= logged_bit;
+  } else {
+    slave_board_data.status.warning_bits &= !logged_bit;
+  }
+}
+
+  
+unsigned int ETMCanSlaveStatusReadLoggedBit(unsigned int logged_bit) {
+  if (slave_board_data.status.warning_bits & logged_bit) {
+    return 0xFFFF;
+  }
+  return 0;
+}
+
+
+void ETMCanSlaveStatusUpdateNotLoggedBit(unsigned int not_logged_bit, unsigned int value) {
+  if (value) {
+    slave_board_data.status.not_logged_bits |= not_logged_bit;
+  } else {
+    slave_board_data.status.not_logged_bits &= !not_logged_bit;
+  }
+}
+
+  
+unsigned int ETMCanSlaveStatusReadNotLoggedBit(unsigned int not_logged_bit) {
+  if (slave_board_data.status.not_logged_bits & not_logged_bit) {
+    return 0xFFFF;
+  }
+  return 0;
+}
+
+
 void ETMCanSlaveProcessMessage(void) {
   ETMCanMessage next_message;
   while (ETMCanBufferNotEmpty(&etm_can_slave_rx_message_buffer)) {
@@ -1113,7 +1214,9 @@ void ETMCanSlaveExecuteCMD(ETMCanMessage* message_ptr) {
     break;
 
   case ETM_CAN_CMD_ID_SET_IGNORE_FAULTS:
-    // DPARKER IMPLIMENT THIS
+    if (message_ptr->word3 == can_params.address) {
+      etm_can_slave_debug_data.faults_being_ignored = message_ptr->word0;
+    }
     break;
 
   case ETM_CAN_CMD_ID_CLEAR_DEBUG:
@@ -1216,7 +1319,7 @@ void ETMCanSlaveExecuteCMD(ETMCanMessage* message_ptr) {
   }
 
   if (setting_data_recieved == 0b01111111) {
-    _CONTROL_NOT_CONFIGURED = 0;
+    slave_board_data.status.control_notice_bits &= !_CONTROL_NOT_CONFIGURED_BIT ;
   }
 }
 
@@ -1233,7 +1336,7 @@ void ETMCanSlaveTimedTransmit(void) {
     ETMCanSlaveSendStatus(); // Send out the status every 100mS
     
     // Set the Ready LED
-    if (_CONTROL_NOT_READY) {
+    if (slave_board_data.status.control_notice_bits & _CONTROL_NOT_READY_BIT) {
       ETMClearPin(can_params.not_ready_led); // This turns on the LED
     } else {
       ETMSetPin(can_params.not_ready_led);  // This turns off the LED
@@ -1483,7 +1586,7 @@ void ETMCanSlaveTimedTransmit(void) {
 	  
 	} else if (slave_data_log_sub_index == 2) {
     	  ETMCanSlaveLogData(ETM_CAN_DATA_LOG_REGISTER_STANDARD_DEBUG_TBD_3, 
-			     etm_can_slave_debug_data.debugging_TBD_15, 
+			     etm_can_slave_debug_data.faults_being_ignored, 
 			     etm_can_slave_debug_data.debugging_TBD_14,
 			     etm_can_slave_debug_data.debugging_TBD_13,
 			     etm_can_slave_debug_data.debugging_TBD_12);      
@@ -1621,22 +1724,15 @@ void ETMCanSlaveSendStatus(void) {
   ETMCanMessage message;
   message.identifier = ETM_CAN_MSG_STATUS_TX | (can_params.address << 2);
   
-  message.word0 = _CONTROL_REGISTER;
-  message.word1 = _FAULT_REGISTER;
-  message.word2 = _WARNING_REGISTER;
-  message.word3 = _NOT_LOGGED_REGISTER;
+  message.word0 = slave_board_data.status.control_notice_bits;
+  message.word1 = slave_board_data.status.fault_bits;
+  message.word2 = slave_board_data.status.warning_bits;
+  message.word3 = slave_board_data.status.not_logged_bits;
 
   ETMCanTXMessage(&message, CXTX1CON_ptr);  
   etm_can_slave_debug_data.can_tx_1++;
-  
-  _NOTICE_0 = 0;
-  _NOTICE_1 = 0;
-  _NOTICE_2 = 0;
-  _NOTICE_3 = 0;
-  _NOTICE_4 = 0;
-  _NOTICE_5 = 0;
-  _NOTICE_6 = 0;
-  _NOTICE_7 = 0;
+
+  slave_board_data.status.control_notice_bits &= 0x00FF;   // Clear the notice bits
 }
 
 
@@ -1680,7 +1776,7 @@ void ETMCanSlaveCheckForTimeOut(void) {
   }
 }
 
-
+/*
 // DPARKER this needs to get fixed -- WHY?? what is the problem???
 void ETMCanSlaveSendUpdateIfNewNotReady(void) {
   static unsigned int previous_ready_status;  // DPARKER - Need better name
@@ -1692,7 +1788,7 @@ void ETMCanSlaveSendUpdateIfNewNotReady(void) {
   }
   previous_ready_status = _CONTROL_NOT_READY;
 }
-
+*/
 
 void ETMCanSlaveClearDebug(void) {
   unsigned int n;

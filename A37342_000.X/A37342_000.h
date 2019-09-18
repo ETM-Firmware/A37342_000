@@ -14,10 +14,6 @@
 #define FCY_CLK_MHZ 10
 
 
-extern ETMCanBoardData               slave_board_data;
-
-
-
 /*
   Hardware Module Resource Usage
 
@@ -290,18 +286,16 @@ extern LambdaControlData global_data_A37342;
 #define STATE_FAULT                  60
 
 
-#define _LOGGED_LAMBDA_NOT_POWERED                      _WARNING_0
-#define _LOGGED_LAMBDA_READBACK_HV_OFF                  _WARNING_1
-#define _LOGGED_LAMBDA_PHASE_LOSS                       _WARNING_2
-#define _LOGGED_LAMBDA_OVER_TEMP                        _WARNING_3
-#define _LOGGED_LAMBDA_INTERLOCK                        _WARNING_4
-#define _LOGGED_LAMBDA_LOAD_FLT                         _WARNING_5
-#define _LOGGED_LAMBDA_SUM_FAULT                        _WARNING_6
+#define _LOGGED_LAMBDA_NOT_POWERED                      _LOGGED_STATUS_0
+#define _LOGGED_LAMBDA_READBACK_HV_OFF                  _LOGGED_STATUS_1
+#define _LOGGED_LAMBDA_PHASE_LOSS                       _LOGGED_STATUS_2
+#define _LOGGED_LAMBDA_OVER_TEMP                        _LOGGED_STATUS_3
+#define _LOGGED_LAMBDA_INTERLOCK                        _LOGGED_STATUS_4
+#define _LOGGED_LAMBDA_LOAD_FLT                         _LOGGED_STATUS_5
+#define _LOGGED_LAMBDA_SUM_FAULT                        _LOGGED_STATUS_6
 
-#define _FAULT_CAN_COMMUNICATION_LATCHED                _FAULT_0
-
-#define _STATUS_LAMBDA_AT_EOC                           _NOT_LOGGED_0
-#define _STATUS_LAMBDA_HIGH_ENERGY                      _NOT_LOGGED_1
+#define _STATUS_LAMBDA_AT_EOC                           _NOT_LOGGED_STATUS_0
+#define _STATUS_LAMBDA_HIGH_ENERGY                      _NOT_LOGGED_STATUS_1
 
 
 #define HV_LAMBDA_MIN_VPROG            3000

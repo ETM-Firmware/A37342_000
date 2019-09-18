@@ -59,20 +59,19 @@ void DoStateMachine(void) {
     
   case STATE_STARTUP:
     InitializeA37342();
-    _CONTROL_NOT_CONFIGURED = 1;
-    _CONTROL_NOT_READY = 1;
+    ETMCanSlaveStatusUpdateBitNotReady(NOT_READY);
     global_data_A37342.control_state = STATE_WAITING_FOR_CONFIG;
     break;
 
     
   case STATE_WAITING_FOR_CONFIG:
     DisableHVLambda();
-    _CONTROL_NOT_READY = 1;
+    ETMCanSlaveStatusUpdateBitNotReady(NOT_READY);
     global_data_A37342.startup_counter = 0;
     while (global_data_A37342.control_state == STATE_WAITING_FOR_CONFIG) {
       DoA37342();
       FlashLeds();
-      if ((_CONTROL_NOT_CONFIGURED == 0) && (global_data_A37342.startup_counter > 200))  {
+      if ((ETMCanSlaveStatusCheckNotConfigured() == 0) && (global_data_A37342.startup_counter > 200))  {
 	UpdateSystemConfiguration(ETMCanSlaveGetSetting(SYSTEM_CONFIGURATION_SELECT));
 	global_data_A37342.control_state = STATE_WAITING_FOR_POWER;
       }
@@ -82,8 +81,7 @@ void DoStateMachine(void) {
 
   case STATE_WAITING_FOR_POWER:
     DisableHVLambda();
-    _CONTROL_NOT_READY = 1;
-    _FAULT_REGISTER = 0;
+    ETMCanSlaveStatusUpdateBitNotReady(NOT_READY);
     global_data_A37342.hv_lambda_power_wait = 0;
     while (global_data_A37342.control_state == STATE_WAITING_FOR_POWER) {
       DoA37342();
@@ -96,7 +94,7 @@ void DoStateMachine(void) {
 	global_data_A37342.control_state = STATE_POWER_UP;
       }
 
-      if (_FAULT_REGISTER != 0) {
+      if (ETMCanSlaveStatusReadFaultRegister()) {
 	global_data_A37342.control_state = STATE_FAULT_WAIT;
       } 
     }
@@ -106,7 +104,7 @@ void DoStateMachine(void) {
   case STATE_POWER_UP:
     global_data_A37342.lambda_reached_eoc = 0;
     EnableHVLambda();
-    _CONTROL_NOT_READY = 1;
+    ETMCanSlaveStatusUpdateBitNotReady(NOT_READY);
     global_data_A37342.hv_lambda_power_wait = 0;
     while (global_data_A37342.control_state == STATE_POWER_UP) {
       DoA37342();
@@ -118,8 +116,8 @@ void DoStateMachine(void) {
       if (ETMCanSlaveGetSyncMsgSystemHVDisable()) {
 	global_data_A37342.control_state = STATE_WAITING_FOR_POWER;
       }
-      
-      if (_FAULT_REGISTER != 0) {
+
+      if (ETMCanSlaveStatusReadFaultRegister()) {
 	global_data_A37342.control_state = STATE_FAULT_WAIT;
       }
       
@@ -130,15 +128,15 @@ void DoStateMachine(void) {
     break;
 
   case STATE_OPERATE:
-    _CONTROL_NOT_READY = 0;
+    ETMCanSlaveStatusUpdateBitNotReady(READY);
     while (global_data_A37342.control_state == STATE_OPERATE) {
       DoA37342();
       
       if (ETMCanSlaveGetSyncMsgSystemHVDisable()) {
 	global_data_A37342.control_state = STATE_WAITING_FOR_POWER;
       }
-      
-      if (_FAULT_REGISTER != 0) {
+
+      if (ETMCanSlaveStatusReadFaultRegister()) {
 	global_data_A37342.control_state = STATE_FAULT_WAIT;
       }
     }
@@ -147,7 +145,7 @@ void DoStateMachine(void) {
 
   case STATE_FAULT_WAIT:
     DisableHVLambda();
-    _CONTROL_NOT_READY = 1;
+    ETMCanSlaveStatusUpdateBitNotReady(NOT_READY);
     global_data_A37342.fault_wait_time = 0;
     while (global_data_A37342.control_state == STATE_FAULT_WAIT) {
       DoA37342();
@@ -161,11 +159,11 @@ void DoStateMachine(void) {
     
   case STATE_FAULT:
     DisableHVLambda();
-    _CONTROL_NOT_READY = 1;
+    ETMCanSlaveStatusUpdateBitNotReady(NOT_READY);
     while (global_data_A37342.control_state == STATE_FAULT) {
       DoA37342();
 
-      if (ETMCanSlaveGetSyncMsgResetEnable()) {
+      if (ETMCanSlaveStatusReadFaultRegister() == 0) {
 	global_data_A37342.control_state = STATE_WAITING_FOR_CONFIG;
       }
     }
@@ -191,7 +189,7 @@ void DoPostPulseProcess(void) {
     ETMAnalogOutputSetPoint(&global_data_A37342.analog_output_low_energy_vprog, ETMCanSlaveGetSetting(HVPS_SET_POINT_DOSE_0));
     ETMAnalogOutputSetPoint(&global_data_A37342.analog_output_high_energy_vprog, ETMCanSlaveGetSetting(HVPS_SET_POINT_DOSE_1));
     PIN_LAMBDA_VOLTAGE_SELECT = OLL_LAMBDA_VOLTAGE_SELECT_LOW_ENERGY;
-    _STATUS_LAMBDA_HIGH_ENERGY = 0;
+    ETMCanSlaveStatusUpdateLoggedBit(_STATUS_LAMBDA_HIGH_ENERGY, 0);
     break;
     
     
@@ -199,7 +197,7 @@ void DoPostPulseProcess(void) {
     ETMAnalogOutputSetPoint(&global_data_A37342.analog_output_low_energy_vprog, ETMCanSlaveGetSetting(HVPS_SET_POINT_DOSE_0));
     ETMAnalogOutputSetPoint(&global_data_A37342.analog_output_high_energy_vprog, ETMCanSlaveGetSetting(HVPS_SET_POINT_DOSE_1));
     PIN_LAMBDA_VOLTAGE_SELECT = !OLL_LAMBDA_VOLTAGE_SELECT_LOW_ENERGY;
-    _STATUS_LAMBDA_HIGH_ENERGY = 1;
+    ETMCanSlaveStatusUpdateLoggedBit(_STATUS_LAMBDA_HIGH_ENERGY, 1);
     break;
 
 
@@ -207,7 +205,7 @@ void DoPostPulseProcess(void) {
     ETMAnalogOutputSetPoint(&global_data_A37342.analog_output_low_energy_vprog, ETMCanSlaveGetSetting(HVPS_SET_POINT_DOSE_2));
     ETMAnalogOutputSetPoint(&global_data_A37342.analog_output_high_energy_vprog, ETMCanSlaveGetSetting(HVPS_SET_POINT_DOSE_3));
     PIN_LAMBDA_VOLTAGE_SELECT = OLL_LAMBDA_VOLTAGE_SELECT_LOW_ENERGY;
-    _STATUS_LAMBDA_HIGH_ENERGY = 0;
+    ETMCanSlaveStatusUpdateLoggedBit(_STATUS_LAMBDA_HIGH_ENERGY, 0);
     break;
 
 
@@ -215,7 +213,7 @@ void DoPostPulseProcess(void) {
     ETMAnalogOutputSetPoint(&global_data_A37342.analog_output_low_energy_vprog, ETMCanSlaveGetSetting(HVPS_SET_POINT_DOSE_2));
     ETMAnalogOutputSetPoint(&global_data_A37342.analog_output_high_energy_vprog, ETMCanSlaveGetSetting(HVPS_SET_POINT_DOSE_3));
     PIN_LAMBDA_VOLTAGE_SELECT = !OLL_LAMBDA_VOLTAGE_SELECT_LOW_ENERGY;
-    _STATUS_LAMBDA_HIGH_ENERGY = 1;
+    ETMCanSlaveStatusUpdateLoggedBit(_STATUS_LAMBDA_HIGH_ENERGY, 1);
     break;
   }
   
@@ -360,68 +358,65 @@ void UpdateFaultsAndStatusBits(void) {
 
   // Update the digital input status pins
   if (PIN_LAMBDA_EOC == ILL_LAMBDA_AT_EOC) {
-    _STATUS_LAMBDA_AT_EOC = 1;
+    ETMCanSlaveStatusUpdateNotLoggedBit(_STATUS_LAMBDA_AT_EOC, 1);
   } else {
-    _STATUS_LAMBDA_AT_EOC = 0;
+    ETMCanSlaveStatusUpdateNotLoggedBit(_STATUS_LAMBDA_AT_EOC, 0);
   }
   
-  if (ETMCanSlaveGetComFaultStatus()) {
-    _FAULT_CAN_COMMUNICATION_LATCHED = 1;
-  }
-
   // Update the logged and not logged status bits
   ETMDigitalUpdateInput(&global_data_A37342.digital_hv_not_powered, PIN_LAMBDA_NOT_POWERED);
   if (ETMDigitalFilteredOutput(&global_data_A37342.digital_hv_not_powered) == ILL_LAMBDA_NOT_POWERED) {
-    _LOGGED_LAMBDA_NOT_POWERED = 1;
+    ETMCanSlaveStatusUpdateLoggedBit(_LOGGED_LAMBDA_NOT_POWERED, 1);
   } else {
-    _LOGGED_LAMBDA_NOT_POWERED = 0;
+    ETMCanSlaveStatusUpdateLoggedBit(_LOGGED_LAMBDA_NOT_POWERED, 0);
   }
 
   ETMDigitalUpdateInput(&global_data_A37342.digital_sum_flt, PIN_LAMBDA_SUM_FLT);
   if (ETMDigitalFilteredOutput(&global_data_A37342.digital_sum_flt) == ILL_LAMBDA_FAULT_ACTIVE) {
-    _LOGGED_LAMBDA_SUM_FAULT = 1;
+    ETMCanSlaveStatusUpdateLoggedBit(_LOGGED_LAMBDA_SUM_FAULT, 1);
   } else {
-    _LOGGED_LAMBDA_SUM_FAULT = 0;
+    ETMCanSlaveStatusUpdateLoggedBit(_LOGGED_LAMBDA_SUM_FAULT, 0);
   }
-    
-    
+       
   ETMDigitalUpdateInput(&global_data_A37342.digital_hv_off,  PIN_LAMBDA_HV_ON_READBACK);
   if (ETMDigitalFilteredOutput(&global_data_A37342.digital_hv_off) != ILL_LAMBDA_HV_ON) {
-    _LOGGED_LAMBDA_READBACK_HV_OFF = 1;
+    ETMCanSlaveStatusUpdateLoggedBit(_LOGGED_LAMBDA_READBACK_HV_OFF, 1);
   } else {
-    _LOGGED_LAMBDA_READBACK_HV_OFF = 0;
+    ETMCanSlaveStatusUpdateLoggedBit(_LOGGED_LAMBDA_READBACK_HV_OFF, 0);
   }
-  
-#ifdef __HVPS_LC1202
-  ETMDigitalUpdateInput(&global_data_A37342.digital_phase_loss,  PIN_LAMBDA_PHASE_LOSS_FLT);
-  if (ETMDigitalFilteredOutput(&global_data_A37342.digital_phase_loss) == ILL_LAMBDA_FAULT_ACTIVE) {
-    _LOGGED_LAMBDA_PHASE_LOSS = 1;
+
+
+  if (ETMCanSlaveGetSetting(SYSTEM_CONFIGURATION_SELECT) == SYSTEM_CONFIGURATION_2_5_R) {
+    // This pin is not valid on the 2.5 ignore phase loss
+    ETMCanSlaveStatusUpdateLoggedBit(_LOGGED_LAMBDA_PHASE_LOSS, 0);
   } else {
-    _LOGGED_LAMBDA_PHASE_LOSS = 0;
+    ETMDigitalUpdateInput(&global_data_A37342.digital_phase_loss,  PIN_LAMBDA_PHASE_LOSS_FLT);
+    if (ETMDigitalFilteredOutput(&global_data_A37342.digital_phase_loss) == ILL_LAMBDA_FAULT_ACTIVE) {
+      ETMCanSlaveStatusUpdateLoggedBit(_LOGGED_LAMBDA_PHASE_LOSS, 1);
+    } else {
+      ETMCanSlaveStatusUpdateLoggedBit(_LOGGED_LAMBDA_PHASE_LOSS, 0);
+    }
   }
-#else
-  _LOGGED_LAMBDA_PHASE_LOSS = 0;
-#endif      
 
   ETMDigitalUpdateInput(&global_data_A37342.digital_over_temp,  PIN_LAMBDA_OVER_TEMP_FLT);
   if (ETMDigitalFilteredOutput(&global_data_A37342.digital_over_temp) == ILL_LAMBDA_FAULT_ACTIVE) {
-    _LOGGED_LAMBDA_OVER_TEMP = 1;
+    ETMCanSlaveStatusUpdateLoggedBit(_LOGGED_LAMBDA_OVER_TEMP, 1);
   } else {
-    _LOGGED_LAMBDA_OVER_TEMP = 0;
+    ETMCanSlaveStatusUpdateLoggedBit(_LOGGED_LAMBDA_OVER_TEMP, 0);
   }
-    
+  
   ETMDigitalUpdateInput(&global_data_A37342.digital_interlock,  PIN_LAMBDA_INTERLOCK_FLT);
   if (ETMDigitalFilteredOutput(&global_data_A37342.digital_interlock) == ILL_LAMBDA_FAULT_ACTIVE) {
-    _LOGGED_LAMBDA_INTERLOCK = 1;
+    ETMCanSlaveStatusUpdateLoggedBit(_LOGGED_LAMBDA_INTERLOCK, 1);
   } else {
-    _LOGGED_LAMBDA_INTERLOCK = 0;
+    ETMCanSlaveStatusUpdateLoggedBit(_LOGGED_LAMBDA_INTERLOCK, 0);
   }
   
   ETMDigitalUpdateInput(&global_data_A37342.digital_load_flt,  PIN_LAMBDA_LOAD_FLT);
   if (ETMDigitalFilteredOutput(&global_data_A37342.digital_load_flt) == ILL_LAMBDA_FAULT_ACTIVE) {
-    _LOGGED_LAMBDA_LOAD_FLT = 1;
+    ETMCanSlaveStatusUpdateLoggedBit(_LOGGED_LAMBDA_LOAD_FLT, 1);
   } else {
-    _LOGGED_LAMBDA_LOAD_FLT = 0;
+    ETMCanSlaveStatusUpdateLoggedBit(_LOGGED_LAMBDA_LOAD_FLT, 0);
   }
 }
 
@@ -429,14 +424,6 @@ void UpdateFaultsAndStatusBits(void) {
 
 
 void InitializeA37342(void) {
-
-  // Initialize the status register and load the inhibit and fault masks
-  _CONTROL_REGISTER = 0;
-  _FAULT_REGISTER = 0;
-  _WARNING_REGISTER = 0;
-  _NOT_LOGGED_REGISTER = 0;
-
-
 
   // Configure Inhibit Interrupt
   _INT1IP = 7; // This must be the highest priority interrupt
