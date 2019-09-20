@@ -116,7 +116,7 @@ unsigned char ETMCanSlaveGetPulseCount(void);
   Returns the count from the sync message
 */
 
-void ETMCanSlaveTriggerRecieved(void);
+void ETMCanSlaveTriggerRecieved(unsigned char pulse_count_at_trigger);
 /*
   Call this once after a trigger to automatically update pulse count and level based on the mode of operation.
   That way if a sync_level command is missed the system will still pulse at the correct level on the next trigger.
@@ -228,9 +228,9 @@ void ETMCanSlaveStatusUpdateLoggedBit(unsigned int logged_bit, unsigned int valu
 unsigned int ETMCanSlaveStatusReadLoggedBit(unsigned int logged_bit);
 // Will return 0xFFFF if the bit is set, 0 otherwise
 
-void ETMCanSlaveStatusUpdateNotLoggedBit(unsigned int logged_bit, unsigned int value);
+void ETMCanSlaveStatusUpdateNotLoggedBit(unsigned int not_logged_bit, unsigned int value);
 
-unsigned int ETMCanSlaveStatusReadNotLoggedBit(unsigned int logged_bit);
+unsigned int ETMCanSlaveStatusReadNotLoggedBit(unsigned int not_logged_bit);
 // Will return 0xFFFF if the bit is set, 0 otherwise
 
 

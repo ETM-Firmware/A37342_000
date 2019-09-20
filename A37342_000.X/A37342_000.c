@@ -61,6 +61,7 @@ void DoStateMachine(void) {
     InitializeA37342();
     ETMCanSlaveStatusUpdateBitNotReady(NOT_READY);
     global_data_A37342.control_state = STATE_WAITING_FOR_CONFIG;
+    ETMCanSlaveStatusUpdateFaultBit(_FAULT_1, 1); // DPARKER TESTING    
     break;
 
     
@@ -180,16 +181,13 @@ void DoPostPulseProcess(void) {
   // Send the pulse data up to the ECB for logging
 
 
-  global_data_A37342.pulse_id = ETMCanSlaveGetPulseCount();
-  global_data_A37342.pulse_level = ETMCanSlaveGetPulseLevel();
-
   switch (global_data_A37342.pulse_level) {
     
   case DOSE_SELECT_DOSE_LEVEL_0:
     ETMAnalogOutputSetPoint(&global_data_A37342.analog_output_low_energy_vprog, ETMCanSlaveGetSetting(HVPS_SET_POINT_DOSE_0));
     ETMAnalogOutputSetPoint(&global_data_A37342.analog_output_high_energy_vprog, ETMCanSlaveGetSetting(HVPS_SET_POINT_DOSE_1));
     PIN_LAMBDA_VOLTAGE_SELECT = OLL_LAMBDA_VOLTAGE_SELECT_LOW_ENERGY;
-    ETMCanSlaveStatusUpdateLoggedBit(_STATUS_LAMBDA_HIGH_ENERGY, 0);
+    ETMCanSlaveStatusUpdateNotLoggedBit(_STATUS_LAMBDA_HIGH_ENERGY, 0);
     break;
     
     
@@ -197,7 +195,7 @@ void DoPostPulseProcess(void) {
     ETMAnalogOutputSetPoint(&global_data_A37342.analog_output_low_energy_vprog, ETMCanSlaveGetSetting(HVPS_SET_POINT_DOSE_0));
     ETMAnalogOutputSetPoint(&global_data_A37342.analog_output_high_energy_vprog, ETMCanSlaveGetSetting(HVPS_SET_POINT_DOSE_1));
     PIN_LAMBDA_VOLTAGE_SELECT = !OLL_LAMBDA_VOLTAGE_SELECT_LOW_ENERGY;
-    ETMCanSlaveStatusUpdateLoggedBit(_STATUS_LAMBDA_HIGH_ENERGY, 1);
+    ETMCanSlaveStatusUpdateNotLoggedBit(_STATUS_LAMBDA_HIGH_ENERGY, 1);
     break;
 
 
@@ -205,7 +203,7 @@ void DoPostPulseProcess(void) {
     ETMAnalogOutputSetPoint(&global_data_A37342.analog_output_low_energy_vprog, ETMCanSlaveGetSetting(HVPS_SET_POINT_DOSE_2));
     ETMAnalogOutputSetPoint(&global_data_A37342.analog_output_high_energy_vprog, ETMCanSlaveGetSetting(HVPS_SET_POINT_DOSE_3));
     PIN_LAMBDA_VOLTAGE_SELECT = OLL_LAMBDA_VOLTAGE_SELECT_LOW_ENERGY;
-    ETMCanSlaveStatusUpdateLoggedBit(_STATUS_LAMBDA_HIGH_ENERGY, 0);
+    ETMCanSlaveStatusUpdateNotLoggedBit(_STATUS_LAMBDA_HIGH_ENERGY, 0);
     break;
 
 
@@ -213,7 +211,7 @@ void DoPostPulseProcess(void) {
     ETMAnalogOutputSetPoint(&global_data_A37342.analog_output_low_energy_vprog, ETMCanSlaveGetSetting(HVPS_SET_POINT_DOSE_2));
     ETMAnalogOutputSetPoint(&global_data_A37342.analog_output_high_energy_vprog, ETMCanSlaveGetSetting(HVPS_SET_POINT_DOSE_3));
     PIN_LAMBDA_VOLTAGE_SELECT = !OLL_LAMBDA_VOLTAGE_SELECT_LOW_ENERGY;
-    ETMCanSlaveStatusUpdateLoggedBit(_STATUS_LAMBDA_HIGH_ENERGY, 1);
+    ETMCanSlaveStatusUpdateNotLoggedBit(_STATUS_LAMBDA_HIGH_ENERGY, 1);
     break;
   }
   
@@ -237,6 +235,9 @@ void DoA37342(void) {
   
   ETMCanSlaveDoCan();
 
+  global_data_A37342.pulse_id = ETMCanSlaveGetPulseCount();
+  global_data_A37342.pulse_level = ETMCanSlaveGetPulseLevel();
+    
   test_vprog_0_monitor = ETMCanSlaveGetSetting(HVPS_SET_POINT_DOSE_0);
 
   if (ETMTickRunOnceEveryNMilliseconds(1, &temp_timer_scope_test)) {
@@ -259,9 +260,8 @@ void DoA37342(void) {
     
     global_data_A37342.hv_lambda_power_wait++;
     global_data_A37342.startup_counter++;
-
+    ETMCanSlaveSetDebugRegister(0, global_data_A37342.control_state);
     ETMCanSlaveSetDebugRegister(1, 0);
-
     ETMCanSlaveSetDebugRegister(2, global_data_A37342.pulse_id);
     ETMCanSlaveSetDebugRegister(3, global_data_A37342.pulse_level);
     
@@ -879,7 +879,7 @@ void __attribute__((interrupt, no_auto_psv)) _T1Interrupt(void) {
 			    global_data_A37342.pulse_id);
   }
 
-  ETMCanSlaveTriggerRecieved();
+  ETMCanSlaveTriggerRecieved(global_data_A37342.pulse_id);
 
 }
   

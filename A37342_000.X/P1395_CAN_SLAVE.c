@@ -770,24 +770,20 @@ unsigned char ETMCanSlaveGetPulseCount(void) {
   return (etm_can_slave_sync_message.pulse_count);
 }
 
-// DPARKER WHAT IS GOING ON HERE??HOW IS THIS WORKING???
-unsigned int last_return_value_level_high_word_count_low_word;  // Pulse Level High Word, Pulse Count Low Word
 
-void ETMCanSlaveTriggerRecieved(void) {
+void ETMCanSlaveTriggerRecieved(unsigned char pulse_count_at_trigger) {
   // Does the slave need to send anything out or just update the next energy level
-  unsigned char last_pulse_count;
-  last_pulse_count = last_return_value_level_high_word_count_low_word;
 
   // Disable the Can Interrupt
   _C1IE = 0;
   _C2IE = 0;
   
-  if (last_pulse_count == etm_can_slave_sync_message.pulse_count) {
+  if (pulse_count_at_trigger == etm_can_slave_sync_message.pulse_count) {
     // we have not recieved a new sync message yet
     // Update pulse_count and pulse_level with the next expected value
     // Check to see if we are in interleave mode
 
-    etm_can_slave_sync_message.pulse_count = (last_pulse_count + 1);
+    etm_can_slave_sync_message.pulse_count = ((pulse_count_at_trigger + 1) & 0xFF);
     switch (etm_can_slave_sync_message.next_energy_level)
       {
       
@@ -941,13 +937,13 @@ unsigned int ETMCanSlaveGetSetting(unsigned char setting_select) {
 
 void ETMCanSlaveStatusUpdateBitNotReady(unsigned int value) {
   if (value) {
-    if (slave_board_data.status.control_notice_bits & _CONTROL_NOT_READY_BIT) {
+    if ((slave_board_data.status.control_notice_bits & _CONTROL_NOT_READY_BIT) == 0) {
       // THIS IS A NEW NOT READY BIT - SEND OUT NEW STATUS MESSAGE
       slave_board_data.status.control_notice_bits |= _CONTROL_NOT_READY_BIT;
       ETMCanSlaveSendStatus();
     }
   } else {
-    slave_board_data.status.control_notice_bits &= !_CONTROL_NOT_READY_BIT;
+    slave_board_data.status.control_notice_bits &= ~_CONTROL_NOT_READY_BIT;
   }
 }
 
@@ -970,7 +966,7 @@ void ETMCanSlaveStatusUpdateFaultBit(unsigned int fault_bit, unsigned int value)
     slave_board_data.status.fault_bits |= fault_bit;
   } else {
     if (etm_can_slave_sync_message.sync_0_control_word.sync_0_reset_enable) {
-      slave_board_data.status.fault_bits &= !fault_bit;
+      slave_board_data.status.fault_bits &= ~fault_bit;
     }
   }
 }
@@ -980,7 +976,7 @@ unsigned int ETMCanSlaveStatusReadFaultBit(unsigned int fault_bit) {
   unsigned int temp_faults;
 
   temp_faults  = slave_board_data.status.fault_bits;
-  temp_faults &= !etm_can_slave_debug_data.faults_being_ignored;
+  temp_faults &= ~etm_can_slave_debug_data.faults_being_ignored;
   
   if (temp_faults & fault_bit) {
     return 0xFFFF;
@@ -993,7 +989,7 @@ unsigned int ETMCanSlaveStatusReadFaultRegister(void) {
   unsigned int temp_faults;
 
   temp_faults  = slave_board_data.status.fault_bits;
-  temp_faults &= !etm_can_slave_debug_data.faults_being_ignored;
+  temp_faults &= ~etm_can_slave_debug_data.faults_being_ignored;
   
   if (temp_faults) {
     return 0xFFFF;
@@ -1006,7 +1002,7 @@ void ETMCanSlaveStatusUpdateLoggedBit(unsigned int logged_bit, unsigned int valu
   if (value) {
     slave_board_data.status.warning_bits |= logged_bit;
   } else {
-    slave_board_data.status.warning_bits &= !logged_bit;
+    slave_board_data.status.warning_bits &= ~logged_bit;
   }
 }
 
@@ -1023,7 +1019,7 @@ void ETMCanSlaveStatusUpdateNotLoggedBit(unsigned int not_logged_bit, unsigned i
   if (value) {
     slave_board_data.status.not_logged_bits |= not_logged_bit;
   } else {
-    slave_board_data.status.not_logged_bits &= !not_logged_bit;
+    slave_board_data.status.not_logged_bits &= ~not_logged_bit;
   }
 }
 
@@ -1319,7 +1315,7 @@ void ETMCanSlaveExecuteCMD(ETMCanMessage* message_ptr) {
   }
 
   if (setting_data_recieved == 0b01111111) {
-    slave_board_data.status.control_notice_bits &= !_CONTROL_NOT_CONFIGURED_BIT ;
+    slave_board_data.status.control_notice_bits &= ~_CONTROL_NOT_CONFIGURED_BIT ;
   }
 }
 
