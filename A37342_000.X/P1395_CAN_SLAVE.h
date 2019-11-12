@@ -10,7 +10,7 @@
 //------------ SLAVE PUBLIC FUNCTIONS AND VARIABLES ------------------- //
 
 typedef struct {
-  unsigned int  data[64];
+  unsigned int  data[68];
   unsigned int  average;
   unsigned int  integral;
   unsigned char pulse_count;

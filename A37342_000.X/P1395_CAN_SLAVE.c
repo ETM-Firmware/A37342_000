@@ -122,6 +122,7 @@ static unsigned long etm_can_slave_communication_timeout_holding_var;  // Used t
 static unsigned char etm_can_slave_com_loss;  // Keeps track of if communicantion from ECB has timed out
 static unsigned int setting_data_recieved;  // This keeps track of which settings registers have been recieved 
 static BUFFERBYTE64 discrete_cmd_buffer;  // Buffer for discrete commands that come in.  This is quiered and processed by the main code as needed
+static unsigned int can_error_counter;
 
 
 #define SCOPE_DATA_SELECT_SIZE         16
@@ -880,16 +881,16 @@ void ETMCanSlaveLogPulseCurrent(TYPE_PULSE_DATA *pulse_data) {
   }
   if (send_this_pulse) {
     pulse_data_transmit_index = 0;
-    Compact12BitInto16Bit(&pulse_data_to_transmit[0], &pulse_data->data[0], 0);
-    Compact12BitInto16Bit(&pulse_data_to_transmit[4], &pulse_data->data[5], 1);
-    Compact12BitInto16Bit(&pulse_data_to_transmit[8], &pulse_data->data[10], 2);
-    Compact12BitInto16Bit(&pulse_data_to_transmit[12], &pulse_data->data[15], 3);
-    Compact12BitInto16Bit(&pulse_data_to_transmit[16], &pulse_data->data[20], 4);
-    Compact12BitInto16Bit(&pulse_data_to_transmit[20], &pulse_data->data[25], 5);
-    Compact12BitInto16Bit(&pulse_data_to_transmit[24], &pulse_data->data[30], 6);
-    Compact12BitInto16Bit(&pulse_data_to_transmit[28], &pulse_data->data[35], 7);
-    Compact12BitInto16Bit(&pulse_data_to_transmit[32], &pulse_data->data[40], 8);
-    Compact12BitInto16Bit(&pulse_data_to_transmit[36], &pulse_data->data[45], 9);
+    Compact12BitInto16Bit(&pulse_data_to_transmit[0], &pulse_data->data[4], 0);
+    Compact12BitInto16Bit(&pulse_data_to_transmit[4], &pulse_data->data[9], 1);
+    Compact12BitInto16Bit(&pulse_data_to_transmit[8], &pulse_data->data[14], 2);
+    Compact12BitInto16Bit(&pulse_data_to_transmit[12], &pulse_data->data[19], 3);
+    Compact12BitInto16Bit(&pulse_data_to_transmit[16], &pulse_data->data[24], 4);
+    Compact12BitInto16Bit(&pulse_data_to_transmit[20], &pulse_data->data[29], 5);
+    Compact12BitInto16Bit(&pulse_data_to_transmit[24], &pulse_data->data[34], 6);
+    Compact12BitInto16Bit(&pulse_data_to_transmit[28], &pulse_data->data[39], 7);
+    Compact12BitInto16Bit(&pulse_data_to_transmit[32], &pulse_data->data[44], 8);
+    Compact12BitInto16Bit(&pulse_data_to_transmit[36], &pulse_data->data[49], 9);
     start_tick = ETMTickGet();
   }
 }
@@ -1329,6 +1330,23 @@ void ETMCanSlaveTimedTransmit(void) {
   if (ETMTickRunOnceEveryNMilliseconds(SLAVE_TRANSMIT_MILLISECONDS, &etm_can_slave_timed_transmit_holding_var)) {
     // Will be true once every 100ms
 
+
+    //  ---------------- Check for too many can errors ----------------- //
+    if (slave_board_data.status.control_notice_bits & _CONTROL_NOT_CONFIGURED_BIT) {
+      can_error_counter = 0;
+      // Do not start tracking can errors until the module has been configured
+    }
+
+    if (can_error_counter) {
+      can_error_counter--;  // reduce the error counter by 1 every 100ms
+    }
+
+    if (can_error_counter > 100) {
+      slave_board_data.status.control_notice_bits |= _CONTROL_CAN_ERROR_BIT; // set the can error bit
+    }
+    // ----------------- end checking for can errors ----------------- //
+
+    
     ETMCanSlaveSendStatus(); // Send out the status every 100mS
     
     // Set the Ready LED
@@ -1997,6 +2015,7 @@ void DoCanInterrupt(void) {
     // DPARKER - figure out which error and fix/reset
     etm_can_slave_debug_data.CXINTF_max |= *CXINTF_ptr;
     etm_can_slave_debug_data.can_error_flag++;
+    can_error_counter++;
     *CXINTF_ptr &= ~ERROR_FLAG_BIT; // Clear the ERR Flag
   } else {
     // FLASH THE CAN LED
