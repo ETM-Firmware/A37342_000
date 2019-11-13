@@ -95,6 +95,7 @@ static unsigned int pulse_data_transmit_index = 0xFF00; // This is is used to ti
 
 
 //Local Funcations
+static void TriggerTest(unsigned long trigger_pin);
 static void ETMCanSlaveProcessMessage(void);
 static void ETMCanSlaveExecuteCMD(ETMCanMessage* message_ptr);           
 static void ETMCanSlaveTimedTransmit(void);
@@ -103,7 +104,7 @@ static void ETMCanSlaveSendStatus(void);
 static void ETMCanSlaveLogData(unsigned int packet_id, unsigned int word3, unsigned int word2, unsigned int word1, unsigned int word0);
 static void ETMCanSlaveCheckForTimeOut(void);
 //static void ETMCanSlaveSendUpdateIfNewNotReady(void);
-static void ETMCanSlaveClearDebug(void);
+static void ETMCanSlaveClearPersistentData(void);
 static void Compact12BitInto16Bit(unsigned int *transmit_data, unsigned int *source_data, unsigned int count);
 static void ETMCanSlaveLoadDefaultCalibration(void);
 static void DoCanInterrupt(void);  //  Helper function for Can interupt handler
@@ -167,7 +168,20 @@ typedef struct {
   unsigned int gun_driver_heater_voltage;
   
   unsigned int afc_manual_target_position;
+  unsigned int system_configuration_select;
+  unsigned int spare_ecb_data_a;
+  unsigned int spare_ecb_data_b;
+  
+  unsigned int aux_set_point_7;
+  unsigned int aux_set_point_6;
+  unsigned int aux_set_point_5;
+  unsigned int aux_set_point_4;
 
+  unsigned int aux_set_point_3;
+  unsigned int aux_set_point_2;
+  unsigned int aux_set_point_1;
+  unsigned int aux_set_point_0;
+  
   unsigned int scope_a_settings;
   unsigned int scope_b_settings;
   unsigned int scope_hv_vmon_settings;
@@ -209,10 +223,11 @@ volatile unsigned int *CXTX2CON_ptr;
 
 void ETMCanSlaveInitialize(unsigned int requested_can_port, unsigned long fcy, unsigned int etm_can_address,
 			   unsigned long can_operation_led, unsigned int can_interrupt_priority,
-			   unsigned long flash_led, unsigned long not_ready_led) {
+			   unsigned long flash_led, unsigned long not_ready_led,
+			   unsigned long trigger_pin) {
 
   unsigned int  eeprom_page_data[16];
-  
+
   slave_board_data.status.control_notice_bits = 0;
   slave_board_data.status.fault_bits = 0;
   slave_board_data.status.warning_bits = 0;
@@ -224,7 +239,7 @@ void ETMCanSlaveInitialize(unsigned int requested_can_port, unsigned long fcy, u
 
   BufferByte64Initialize(&discrete_cmd_buffer);
 
-  setting_data_recieved &= 0b00000000;
+  setting_data_recieved = 0x0000;
   slave_board_data.status.control_notice_bits |= _CONTROL_NOT_CONFIGURED_BIT ; // set the not configured bit
   
   etm_can_slave_debug_data.can_build_version = P1395_CAN_SLAVE_VERSION;
@@ -262,6 +277,8 @@ void ETMCanSlaveInitialize(unsigned int requested_can_port, unsigned long fcy, u
   ETMCanBufferInitialize(&etm_can_slave_tx_message_buffer);
   
   ETMPinTrisOutput(can_params.led);
+
+  TriggerTest(trigger_pin);
   
   if (requested_can_port != CAN_PORT_2) {
     // Use CAN1
@@ -423,7 +440,7 @@ void ETMCanSlaveInitialize(unsigned int requested_can_port, unsigned long fcy, u
     // Test page read correctly
     can_params.eeprom_intialization_error = 0;
   } else {
-    etm_can_slave_debug_data.debugging_TBD_17 = 1;
+    etm_can_slave_debug_data.eeprom_test_page_error = 1;
     // Test Page did not read properly, try and write it
     if(ETMEEPromWritePageWithConfirmation(EEPROM_TEST_PAGE, &eeprom_page_data[0]) == 0xFFFF) {
       can_params.eeprom_intialization_error = 0;
@@ -549,7 +566,7 @@ void ETMCanSlaveInitialize(unsigned int requested_can_port, unsigned long fcy, u
   } else {
     // Data error, set default values and error flag
     can_params.eeprom_intialization_error = 1;
-    etm_can_slave_debug_data.debugging_TBD_16++;
+    etm_can_slave_debug_data.eeprom_default_value_count++;
     etm_can_slave_debug_data.calibration_0_internal_gain   = ETM_ANALOG_CALIBRATION_SCALE_1;
     etm_can_slave_debug_data.calibration_0_internal_offset = ETM_ANALOG_OFFSET_ZERO;
     etm_can_slave_debug_data.calibration_0_external_gain   = ETM_ANALOG_CALIBRATION_SCALE_1;
@@ -586,7 +603,7 @@ void ETMCanSlaveInitialize(unsigned int requested_can_port, unsigned long fcy, u
   } else {
     // Data error, set default values and error flag
     can_params.eeprom_intialization_error = 1;
-    etm_can_slave_debug_data.debugging_TBD_16++;
+    etm_can_slave_debug_data.eeprom_default_value_count++;
     
     etm_can_slave_debug_data.calibration_3_internal_gain   = ETM_ANALOG_CALIBRATION_SCALE_1;
     etm_can_slave_debug_data.calibration_3_internal_offset = ETM_ANALOG_OFFSET_ZERO;
@@ -619,7 +636,7 @@ void ETMCanSlaveInitialize(unsigned int requested_can_port, unsigned long fcy, u
   } else {
     // Data error, set default values and error flag
     can_params.eeprom_intialization_error = 1;
-    etm_can_slave_debug_data.debugging_TBD_16++;
+    etm_can_slave_debug_data.eeprom_default_value_count++;
     
     etm_can_slave_debug_data.calibration_6_internal_gain   = ETM_ANALOG_CALIBRATION_SCALE_1;
     etm_can_slave_debug_data.calibration_6_internal_offset = ETM_ANALOG_OFFSET_ZERO;
@@ -640,16 +657,238 @@ void ETMCanSlaveInitialize(unsigned int requested_can_port, unsigned long fcy, u
     
   } else {
     can_params.eeprom_intialization_error = 1;
-    etm_can_slave_debug_data.debugging_TBD_16++;
+    etm_can_slave_debug_data.eeprom_default_value_count++;
 	
     slave_board_data.device_rev_2x_ASCII           = 0x3333;
     slave_board_data.device_serial_number          = 44444;
   }
 
-  // Debugging Pins Used
-  _TRISA7 = 0;
-  _TRISF8 = 0;
 }
+
+
+
+/*
+void TriggerTest(unsigned long trigger_pin) {
+#define WAIT_FOR_LOW    0
+#define LOW_FOUND       1
+#define HIGH_FOUND      2
+#define HIGH_STOP_FOUND 3
+  
+  unsigned int  trigger_ok;
+  unsigned int  trigger_state;
+  unsigned long start_time;
+  unsigned long low_time;
+  unsigned long stop_time;
+  unsigned long length;
+
+  unsigned int  ticks_in_one_ms;
+
+  ticks_in_one_ms = ETMTickGet1msMultiplier();
+
+  
+  trigger_ok = 0xFFFF;
+  if (trigger_pin != _PIN_NOT_CONNECTED) {
+    // Look for trigger inputs
+    // Time out after 5 seconds
+    trigger_state = WAIT_FOR_LOW;
+    ETMPinTrisInput(trigger_pin);
+    start_time = 0;
+    low_time = 0;
+    stop_time = 0;
+    while (ETMTickGreaterThanNMilliseconds(5000, 0) == 0) {
+      ClrWdt();
+      // wait for the first low
+      if (trigger_state == WAIT_FOR_LOW) {
+	if (ETMReadPin(trigger_pin) == 0) {
+	  trigger_state = LOW_FOUND;
+	}
+      } else if (trigger_state == LOW_FOUND) {
+	if (ETMReadPin(trigger_pin)) {
+	  trigger_state = HIGH_FOUND;
+	  start_time = ETMTickGet();
+	}
+      } else if (trigger_state == HIGH_FOUND) {
+	if (ETMReadPin(trigger_pin) == 0) {
+	  trigger_state = HIGH_STOP_FOUND;
+	  low_time = ETMTickGet();
+	}
+      } else if (trigger_state == HIGH_STOP_FOUND) {
+	if (ETMReadPin(trigger_pin)) {
+	  stop_time = ETMTickGet();
+	  break;
+	}
+      }
+    }
+    // Measure the period - should be 25K (10mS)
+    // assume 24,750K -> 25,250K is ok
+
+    length = stop_time - start_time;
+    
+    if ((length < 24750) || (length > 25250)) {
+      trigger_ok = 0;
+    }
+    etm_can_slave_debug_data.trigger_test_period = length;
+    
+    // Look at the pulse width - should be 100 (40uS)
+    // 85 -> 115 is OK
+    // Look for inverted Pulse width
+    if ((low_time - start_time) > 1000) {
+      // Assume inverted
+      length = stop_time - low_time;
+    } else {
+      length = low_time - start_time;
+    }
+    if ((length < 85) || (length > 115)) {
+      trigger_ok = 0;
+    }
+    etm_can_slave_debug_data.trigger_test_width = length;
+  }
+  
+  if (trigger_ok == 0) {
+    slave_board_data.status.control_notice_bits |= _CONTROL_TRIGGER_CHECK_ERROR;
+    slave_board_data.status.control_notice_bits |= _CONTROL_SELF_CHECK_ERROR;
+  }
+}
+
+*/
+void TriggerTest(unsigned long trigger_pin) {
+  unsigned long start_time;
+  unsigned long period;
+  unsigned long width;
+  unsigned long low_transition_a;
+  unsigned long low_transition_b;
+  unsigned long high_transition;
+  unsigned int  triggers_counted;
+  unsigned int  pulse_inverted;
+  unsigned int  trigger_ok;
+
+  unsigned long max_period;
+  unsigned long min_period;
+  unsigned long max_width;
+  unsigned long min_width;
+
+  unsigned long period_accumulator;
+  unsigned long width_accumulator;
+
+  max_period = ETMTickGet1msMultiplier();
+  max_period *= 1010;
+  max_period /= 100;
+
+  min_period = ETMTickGet1msMultiplier();
+  min_period *= 990;
+  min_period /= 100;
+  
+
+  max_width = ETMTickGet1msMultiplier();
+  max_width *= 9;
+  max_width /= 200;
+
+  min_width = ETMTickGet1msMultiplier();
+  min_width *= 7;
+  min_width /= 200;
+  
+  start_time = ETMTickGet();
+  triggers_counted = 0;
+  trigger_ok = 1;
+
+  period_accumulator = 0;
+  width_accumulator = 0;
+  
+  
+  // wait for a high
+  while ((ETMReadPin(trigger_pin) == 0) && (ETMTickGreaterThanNMilliseconds(5000, start_time) == 0)) {}
+  
+  // Wait for a low - This is the start of test pulse
+  while ((ETMReadPin(trigger_pin)) && (ETMTickGreaterThanNMilliseconds(5000, start_time) == 0)) {}
+  low_transition_a = ETMTickGet();
+
+  // wait for a high - Measure the low time
+  while ((ETMReadPin(trigger_pin) == 0) && (ETMTickGreaterThanNMilliseconds(5000, start_time) == 0)) {}
+  high_transition = ETMTickGet();
+
+  // wait for a low - this is the end of the test pulse
+  while ((ETMReadPin(trigger_pin)) && (ETMTickGreaterThanNMilliseconds(5000, start_time) == 0)) {}
+  low_transition_b = ETMTickGet();
+
+  pulse_inverted = 0;
+  if ((low_transition_b - high_transition) > (high_transition - low_transition_a)) {
+    pulse_inverted = 1;
+  }
+
+  _TRISF5 = 0;
+  
+  // Check 512 Pulses
+  // wait for a high
+  while ((ETMReadPin(trigger_pin) == 0) && (ETMTickGreaterThanNMilliseconds(5000, start_time) == 0)) {}
+
+  // Wait for a low - This is the start of test procedure
+  while ((ETMReadPin(trigger_pin)) && (ETMTickGreaterThanNMilliseconds(5000, start_time) == 0)) {}
+  low_transition_a = ETMTickGet();
+
+  while ((triggers_counted <= 250) && (ETMTickGreaterThanNMilliseconds(5000, start_time) == 0)) {
+    
+    // wait for a high
+    while ((ETMReadPin(trigger_pin) == 0) && (ETMTickGreaterThanNMilliseconds(5000, start_time) == 0)) {}
+    high_transition = ETMTickGet();
+    _LATF5 = 1;
+    // wait for a low
+    while ((ETMReadPin(trigger_pin)) && (ETMTickGreaterThanNMilliseconds(5000, start_time) == 0)) {}
+    low_transition_b = ETMTickGet();
+    _LATF5 = 0;
+
+    // Check the values
+    period = low_transition_b - low_transition_a;
+    if (pulse_inverted) {
+      width = high_transition - low_transition_a;
+    } else {
+      width = low_transition_b - high_transition;
+    }
+    
+    if ((period < min_period) || (period > max_period)) {
+      trigger_ok = 0;
+    }
+    if ((width < min_width) || (width > max_width)) {
+      trigger_ok = 0;
+    }
+
+    triggers_counted++;
+    low_transition_a = low_transition_b;
+
+    width_accumulator += width;
+    period_accumulator += period;
+  }
+
+  if (triggers_counted < 250) {
+    trigger_ok = 0;
+  }
+
+  // get the average period in uS
+  period_accumulator *= 4;
+  period_accumulator /= ETMTickGet1msMultiplier();
+
+  width_accumulator *= 4;
+  width_accumulator /= ETMTickGet1msMultiplier();
+  
+  etm_can_slave_debug_data.trigger_test_width = width_accumulator;
+  etm_can_slave_debug_data.trigger_test_period = period_accumulator;
+
+  if ((etm_can_slave_debug_data.trigger_test_width > 41)||
+      (etm_can_slave_debug_data.trigger_test_width < 39)) {
+    trigger_ok = 0;
+  }
+
+  if ((etm_can_slave_debug_data.trigger_test_period > 10100)||
+      (etm_can_slave_debug_data.trigger_test_period < 9900)) {
+    trigger_ok = 0;
+  }
+
+
+  
+  if (trigger_ok == 0) {
+    slave_board_data.status.control_notice_bits |= _CONTROL_TRIGGER_CHECK_ERROR;
+    slave_board_data.status.control_notice_bits |= _CONTROL_SELF_CHECK_ERROR;
+  }
+}  
 
 
 void ETMCanSlaveLoadConfiguration(unsigned long agile_id, unsigned int agile_dash,
@@ -750,6 +989,15 @@ unsigned int ETMCanSlaveGetSyncMsgGunDriverDisableHeater(void) {
   }
 }
 
+unsigned int ETMCanSlaveGetSyncMsgSystemInitializationActive(void) {
+  if (etm_can_slave_sync_message.sync_0_control_word.sync_7_system_initialization_active) {
+    return 0xFFFF;
+  } else {
+    return 0;
+  }
+}
+
+  
 
 unsigned int ETMCanSlaveGetSyncMsgEnableFaultIgnore(void) {
   if (etm_can_slave_sync_message.sync_0_control_word.sync_E_ingnore_faults_enabled) {
@@ -946,6 +1194,11 @@ void ETMCanSlaveStatusUpdateBitNotReady(unsigned int value) {
   } else {
     slave_board_data.status.control_notice_bits &= ~_CONTROL_NOT_READY_BIT;
   }
+}
+
+
+void ETMCanSlaveStatusSetSelfCheckError(void) {
+  slave_board_data.status.control_notice_bits |= _CONTROL_SELF_CHECK_ERROR;
 }
 
 
@@ -1216,8 +1469,8 @@ void ETMCanSlaveExecuteCMD(ETMCanMessage* message_ptr) {
     }
     break;
 
-  case ETM_CAN_CMD_ID_CLEAR_DEBUG:
-    ETMCanSlaveClearDebug();
+  case ETM_CAN_CMD_ID_CLEAR_PERSISTENT_DATA:
+    ETMCanSlaveClearPersistentData();
     break;
     
   case ETM_CAN_CMD_ID_HVPS_SET_POINTS:
@@ -1225,7 +1478,7 @@ void ETMCanSlaveExecuteCMD(ETMCanMessage* message_ptr) {
     slave_data.hvps_set_point_dose_level_2 = message_ptr->word2;
     slave_data.hvps_set_point_dose_level_1 = message_ptr->word1;
     slave_data.hvps_set_point_dose_level_0 = message_ptr->word0;
-    setting_data_recieved |= 0b00000001;
+    setting_data_recieved |= 0x0001;
     break;
 
   case ETM_CAN_CMD_ID_MAGNET_SET_POINTS:
@@ -1233,7 +1486,7 @@ void ETMCanSlaveExecuteCMD(ETMCanMessage* message_ptr) {
     slave_data.electromagnet_set_point_dose_level_2 = message_ptr->word2;
     slave_data.electromagnet_set_point_dose_level_1 = message_ptr->word1;
     slave_data.electromagnet_set_point_dose_level_0 = message_ptr->word0;
-    setting_data_recieved |= 0b00000010;
+    setting_data_recieved |= 0x0002;
     break;
 
   case ETM_CAN_CMD_ID_AFC_HOME_POSTION:
@@ -1241,7 +1494,7 @@ void ETMCanSlaveExecuteCMD(ETMCanMessage* message_ptr) {
     slave_data.afc_home_position_dose_level_2 = message_ptr->word2;
     slave_data.afc_home_position_dose_level_1 = message_ptr->word1;
     slave_data.afc_home_position_dose_level_0 = message_ptr->word0;
-    setting_data_recieved |= 0b00000100;
+    setting_data_recieved |= 0x0004;
     break;
 
   case ETM_CAN_CMD_ID_GUN_PULSE_TOP_SET_POINTS:
@@ -1249,7 +1502,7 @@ void ETMCanSlaveExecuteCMD(ETMCanMessage* message_ptr) {
     slave_data.gun_driver_pulse_top_voltage_dose_level_2 = message_ptr->word2;
     slave_data.gun_driver_pulse_top_voltage_dose_level_1 = message_ptr->word1;
     slave_data.gun_driver_pulse_top_voltage_dose_level_0 = message_ptr->word0;
-    setting_data_recieved |= 0b00001000;
+    setting_data_recieved |= 0x0008;
     break;
 
   case ETM_CAN_CMD_ID_GUN_CATHODE_SET_POINTS:
@@ -1257,7 +1510,7 @@ void ETMCanSlaveExecuteCMD(ETMCanMessage* message_ptr) {
     slave_data.gun_driver_cathode_voltage_dose_level_2 = message_ptr->word2;
     slave_data.gun_driver_cathode_voltage_dose_level_1 = message_ptr->word1;
     slave_data.gun_driver_cathode_voltage_dose_level_0 = message_ptr->word0;
-    setting_data_recieved |= 0b00010000;
+    setting_data_recieved |= 0x0010;
     break;
 
   case ETM_CAN_CMD_ID_ALL_DOSE_SET_POINTS_REGISTER_A:
@@ -1265,14 +1518,33 @@ void ETMCanSlaveExecuteCMD(ETMCanMessage* message_ptr) {
     slave_data.afc_aux_control_or_offset              = message_ptr->word2;
     slave_data.gun_driver_grid_bias_voltage           = message_ptr->word1;
     slave_data.gun_driver_heater_voltage              = message_ptr->word0;
-    setting_data_recieved |= 0b00100000;
+    setting_data_recieved |= 0x0020;
     break;
 
   case ETM_CAN_CMD_ID_ALL_DOSE_SET_POINTS_REGISTER_B:
+    slave_data.spare_ecb_data_a                       = message_ptr->word3;
+    slave_data.spare_ecb_data_b                       = message_ptr->word2;
+    slave_data.system_configuration_select            = message_ptr->word1;
     slave_data.afc_manual_target_position             = message_ptr->word0;
-    setting_data_recieved |= 0b01000000;
+    setting_data_recieved |= 0x0040;
     break;
 
+  case ETM_CAN_CMD_ID_AUX_SET_POINT_A:
+    slave_data.aux_set_point_7                        = message_ptr->word3;
+    slave_data.aux_set_point_6                        = message_ptr->word2;
+    slave_data.aux_set_point_5                        = message_ptr->word1;
+    slave_data.aux_set_point_4                        = message_ptr->word0;
+    setting_data_recieved |= 0x0080;
+    break;
+
+  case ETM_CAN_CMD_ID_AUX_SET_POINT_B:
+    slave_data.aux_set_point_3                        = message_ptr->word3;
+    slave_data.aux_set_point_2                        = message_ptr->word2;
+    slave_data.aux_set_point_1                        = message_ptr->word1;
+    slave_data.aux_set_point_0                        = message_ptr->word0;
+    setting_data_recieved |= 0x0100;
+    break;
+    
   case ETM_CAN_CMD_ID_DISCRETE_CMD:
     discrete_cmd_id = message_ptr->word3;
     BufferByte64WriteByte(&discrete_cmd_buffer, discrete_cmd_id);
@@ -1315,7 +1587,7 @@ void ETMCanSlaveExecuteCMD(ETMCanMessage* message_ptr) {
 			  
   }
 
-  if (setting_data_recieved == 0b01111111) {
+  if (setting_data_recieved == 0x01FF) {
     slave_board_data.status.control_notice_bits &= ~_CONTROL_NOT_CONFIGURED_BIT ;
   }
 }
@@ -1341,8 +1613,8 @@ void ETMCanSlaveTimedTransmit(void) {
       can_error_counter--;  // reduce the error counter by 1 every 100ms
     }
 
-    if (can_error_counter > 100) {
-      slave_board_data.status.control_notice_bits |= _CONTROL_CAN_ERROR_BIT; // set the can error bit
+    if (can_error_counter > 400) {
+      slave_board_data.status.control_notice_bits |= _CONTROL_CAN_ERROR_CNT_FLT_BIT; // set the can error bit
     }
     // ----------------- end checking for can errors ----------------- //
 
@@ -1577,8 +1849,8 @@ void ETMCanSlaveTimedTransmit(void) {
 	  ETMCanSlaveLogData(ETM_CAN_DATA_LOG_REGISTER_EEPROM_CRC_DEBUG, 
 			     etm_can_slave_debug_data.eeprom_crc_error_count, 
 			     etm_can_slave_debug_data.cmd_data_register_read_invalid_index,
-			     etm_can_slave_debug_data.debugging_TBD_17,
-			     etm_can_slave_debug_data.debugging_TBD_16);      
+			     etm_can_slave_debug_data.eeprom_test_page_error,
+			     etm_can_slave_debug_data.eeprom_default_value_count);      
 	}
 	break;
 
@@ -1601,8 +1873,8 @@ void ETMCanSlaveTimedTransmit(void) {
 	} else if (slave_data_log_sub_index == 2) {
     	  ETMCanSlaveLogData(ETM_CAN_DATA_LOG_REGISTER_STANDARD_DEBUG_TBD_3, 
 			     etm_can_slave_debug_data.faults_being_ignored, 
-			     etm_can_slave_debug_data.debugging_TBD_14,
-			     etm_can_slave_debug_data.debugging_TBD_13,
+			     etm_can_slave_debug_data.trigger_test_period,
+			     etm_can_slave_debug_data.trigger_test_width,
 			     etm_can_slave_debug_data.debugging_TBD_12);      
 	} else {
     	  ETMCanSlaveLogData(ETM_CAN_DATA_LOG_REGISTER_STANDARD_DEBUG_TBD_2, 
@@ -1790,33 +2062,10 @@ void ETMCanSlaveCheckForTimeOut(void) {
   }
 }
 
-/*
-// DPARKER this needs to get fixed -- WHY?? what is the problem???
-void ETMCanSlaveSendUpdateIfNewNotReady(void) {
-  static unsigned int previous_ready_status;  // DPARKER - Need better name
-  
-  if ((previous_ready_status == 0) && (_CONTROL_NOT_READY)) {
-    // There is new condition that is causing this board to inhibit operation.
-    // Send a status update upstream to Master
-    ETMCanSlaveSendStatus();
-  }
-  previous_ready_status = _CONTROL_NOT_READY;
-}
-*/
 
-void ETMCanSlaveClearDebug(void) {
-  unsigned int n;
-  unsigned int *reset_data_ptr;
-
-  reset_data_ptr = (unsigned int*)&etm_can_slave_debug_data;
-
-  for (n = 0; n < ((sizeof(etm_can_slave_debug_data)>>1)-32); n++) {
-    *reset_data_ptr = 0;
-    reset_data_ptr++;
-  }
-
-  etm_can_slave_debug_data.can_build_version = P1395_CAN_SLAVE_VERSION;
-  etm_can_slave_debug_data.library_build_version = ETM_LIBRARY_VERSION;
+void ETMCanSlaveClearPersistentData(void) {
+  etm_can_persistent_data.reset_count = 0;
+  etm_can_persistent_data.can_timeout_count = 0;
 }
 
 

@@ -103,10 +103,8 @@ typedef struct {
   // Can data log - 0x29Z
   unsigned int eeprom_crc_error_count;
   unsigned int cmd_data_register_read_invalid_index;
-  unsigned int debugging_TBD_17;    // 1 here indicates that the EEProm had error at startup
-  unsigned int debugging_TBD_16;    // count of EEProm Registers that had to be loaded with default values
-  // DPARKER CHANGE THE NAMES ON THESE SO THAT THEY REFLECT REALITY
-
+  unsigned int eeprom_test_page_error; // The EEprom Test page was not read properly (probably a blank eeprom)
+  unsigned int eeprom_default_value_count;    // count of EEProm Registers that had to be loaded with default values
   
   // Can data log - 0x2AZ
   unsigned int reset_count;
@@ -122,8 +120,8 @@ typedef struct {
   
   // Can data log - 0x2CZ
   unsigned int faults_being_ignored;
-  unsigned int debugging_TBD_14;     // Debugging TBD
-  unsigned int debugging_TBD_13;     // Debugging TBD
+  unsigned int trigger_test_period;
+  unsigned int trigger_test_width;
   unsigned int debugging_TBD_12;     // Debugging TBD
 
   // Can data log - 0x2DZ
@@ -205,7 +203,7 @@ typedef struct {
   unsigned sync_4_cooling_fault:1;
   unsigned sync_5_system_hv_disable:1;
   unsigned sync_6_gun_driver_disable_heater:1;
-  unsigned sync_7_unused:1;
+  unsigned sync_7_system_initialization_active:1;
 
   unsigned sync_8_unused:1;
   unsigned sync_9_unused:1;
@@ -467,7 +465,7 @@ unsigned int ETMCanBufferNotEmpty(ETMCanMessageBuffer* buffer_ptr);
 #define ETM_CAN_CMD_ID_SET_RAM_DEBUG                                    0x04
 #define ETM_CAN_CMD_ID_SET_EEPROM_DEBUG                                 0x05
 #define ETM_CAN_CMD_ID_SET_IGNORE_FAULTS                                0x06
-#define ETM_CAN_CMD_ID_CLEAR_DEBUG                                      0x07
+#define ETM_CAN_CMD_ID_CLEAR_PERSISTENT_DATA                            0x07
 #define ETM_CAN_CMD_ID_SCOPE_SETTINGS                                   0x08
 
 #define ETM_CAN_CMD_ID_HVPS_SET_POINTS                                  0x10
@@ -477,7 +475,8 @@ unsigned int ETMCanBufferNotEmpty(ETMCanMessageBuffer* buffer_ptr);
 #define ETM_CAN_CMD_ID_GUN_CATHODE_SET_POINTS                           0x14
 #define ETM_CAN_CMD_ID_ALL_DOSE_SET_POINTS_REGISTER_A                   0x15
 #define ETM_CAN_CMD_ID_ALL_DOSE_SET_POINTS_REGISTER_B                   0x16
-
+#define ETM_CAN_CMD_ID_AUX_SET_POINT_A                                  0x17
+#define ETM_CAN_CMD_ID_AUX_SET_POINT_B                                  0x18
 
 #define ETM_CAN_CMD_ID_DISCRETE_CMD                                     0x1F                       
 
@@ -606,8 +605,9 @@ typedef struct {
 
 #define _CONTROL_NOT_READY_BIT                0x0001
 #define _CONTROL_NOT_CONFIGURED_BIT           0x0002
-
-
+#define _CONTROL_SELF_CHECK_ERROR             0x0004
+#define _CONTROL_CAN_ERROR_CNT_FLT_BIT        0x0008
+#define _CONTROL_TRIGGER_CHECK_ERROR          0x0010
 
 
 

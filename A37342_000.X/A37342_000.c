@@ -61,7 +61,6 @@ void DoStateMachine(void) {
     InitializeA37342();
     ETMCanSlaveStatusUpdateBitNotReady(NOT_READY);
     global_data_A37342.control_state = STATE_WAITING_FOR_CONFIG;
-    ETMCanSlaveStatusUpdateFaultBit(_FAULT_1, 1); // DPARKER TESTING    
     break;
 
     
@@ -469,7 +468,8 @@ void InitializeA37342(void) {
   // Initialize the Can module
   ETMCanSlaveInitialize(CAN_PORT_1, FCY_CLK, ETM_CAN_ADDR_HV_LAMBDA_BOARD,
 			_PIN_RG13, 4,
-			_PIN_RA7, _PIN_RG12);
+			_PIN_RA7, _PIN_RG12,
+			_PIN_RA12);
 
   ETMCanSlaveLoadConfiguration(37342, SOFTWARE_DASH_NUMBER, FIRMWARE_AGILE_REV, FIRMWARE_BRANCH, FIRMWARE_BRANCH_REV);
 

@@ -28,7 +28,8 @@ typedef struct {
 // Public Functions
 void ETMCanSlaveInitialize(unsigned int requested_can_port, unsigned long fcy, unsigned int etm_can_address,
 			   unsigned long can_operation_led, unsigned int can_interrupt_priority,
-			   unsigned long flash_led, unsigned long not_ready_led);
+			   unsigned long flash_led, unsigned long not_ready_led,
+			   unsigned long trigger_pin);
 /*
   This is called once when the processor starts up to initialize the can bus and all of the can variables
 */
@@ -95,10 +96,12 @@ unsigned int ETMCanSlaveGetSyncMsgGunDriverDisableHeater(void);
   the gun driver should shut down the heater (and everything else it needs to safely) on this
 */
 
-//unsigned int ETMCanSlaveGetSyncMsgEnableFaultIgnore(void);
+unsigned int ETMCanSlaveGetSyncMsgSystemInitializationActive(void);
 /*
-  DPARKER WORK ON THE FAULT IGNORE FUNCTIONALITY
+  returns 0xFFFF if the ECB is in intialization mode, 0 otherwise
+  because the ECB sends out triggers while initializing, boards should stay in their initialzation state while this bit is set
 */
+
 
 unsigned char ETMCanSlaveGetPulseLevel(void);
 /*
@@ -203,12 +206,26 @@ unsigned int ETMCanSlaveGetSetting(unsigned char setting_select);
 
 #define AFC_MANUAL_TARGET_POSTION                    24
 #define SYSTEM_CONFIGURATION_SELECT                  25
+#define SPARE_ECB_DATA_A                             26
+#define SPARE_ECB_DATA_B                             27
+
+#define AUX_SET_POINT_7                              28
+#define AUX_SET_POINT_6                              29
+#define AUX_SET_POINT_5                              30
+#define AUX_SET_POINT_4                              31
+
+#define AUX_SET_POINT_3                              32
+#define AUX_SET_POINT_2                              33
+#define AUX_SET_POINT_1                              34
+#define AUX_SET_POINT_0                              35
 
 
 
 void ETMCanSlaveStatusUpdateBitNotReady(unsigned int value);
 #define NOT_READY         1
 #define READY             0
+
+void ETMCanSlaveStatusSetSelfCheckError(void);
 
 void ETMCanSlaveStatusSetNoticeBit(unsigned int notice_bit);
 
